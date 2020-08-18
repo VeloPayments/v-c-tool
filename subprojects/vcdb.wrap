@@ -1,6 +1,6 @@
 [wrap-git]
 directory = vcdb
-revision = df4db662a4ed793d5f4fbd8fda7e3735ccf4896b
+revision = v0.2.0
 url = git@github.com:velopayments/v-c-database.git
 push-url = git@github.com:velopayments/v-c-database.git
 
