@@ -32,12 +32,9 @@ vcblockchain = dependency(
     fallback : ['vcblockchain', 'vcblockchain_dep']
 )
 
-minunit = dependency(
-    'minunit',
-    main : true,
-    required : true,
-    fallback : ['minunit', 'minunit_dep']
-)
+cmake = import('cmake')
+minunit_proj = cmake.subproject('minunit')
+minunit = minunit_proj.dependency('minunit')
 
 threads = dependency('threads')
 
