@@ -25,6 +25,8 @@ struct mock_file
     std::function<int (file*, int)> mockclose;
     std::function<int (file*, int, void*, size_t, size_t*)> mockread;
     std::function<int (file*, int, const void*, size_t, size_t*)> mockwrite;
+    std::function<int (file*, int, off_t, file_lseek_whence, off_t*)> mocklseek;
+    std::function<int (file*, int)> mockfsync;
 };
 
 extern const
@@ -37,6 +39,10 @@ extern const
 std::function<int (file*, int, void*, size_t, size_t*)> stubread;
 extern const
 std::function<int (file*, int, const void*, size_t, size_t*)> stubwrite;
+extern const
+std::function<int (file*, int, off_t, file_lseek_whence, off_t*)> stublseek;
+extern const
+std::function<int (file*, int)> stubfsync;
 
 /**
  * \brief Initialize a mock file interface.
@@ -47,6 +53,8 @@ std::function<int (file*, int, const void*, size_t, size_t*)> stubwrite;
  * \param mockclose     The mock close function.
  * \param mockread      The mock read function.
  * \param mockwrite     The mock write function.
+ * \param mocklseek     The mock lseek function.
+ * \param mockfsync     The mock fsync function.
  *
  * \returns a status code indicating success or failure.
  *      - VCTOOL_STATUS_SUCCESS on success.
@@ -58,6 +66,8 @@ int file_mock_init(
     std::function<int (file*, int*, const char*, int, mode_t)> mockopen,
     std::function<int (file*, int)> mockclose,
     std::function<int (file*, int, void*, size_t, size_t*)> mockread,
-    std::function<int (file*, int, const void*, size_t, size_t*)> mockwrite);
+    std::function<int (file*, int, const void*, size_t, size_t*)> mockwrite,
+    std::function<int (file*, int, off_t, file_lseek_whence, off_t*)> mocklseek,
+    std::function<int (file*, int)> mockfsync);
 
 #endif /*VCTOOL_TEST_FILE_MOCK_HEADER_GUARD*/

@@ -11,6 +11,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <vctool/status_codes.h>
 #include <vpr/disposable.h>
 
@@ -22,6 +23,37 @@ extern "C" {
 /* forward decls */
 typedef struct file_stat_st file_stat_st;
 typedef struct file file;
+
+/**
+ * \brief This enumeration explains how a file offset should be interpreted in
+ * \ref file_lseek.
+ */
+typedef enum file_lseek_whence
+{
+    /** \brief The file offset is set to the given absolute offset. */
+    FILE_LSEEK_WHENCE_ABSOLUTE,
+
+    /** \brief The file offset is set to the current location plus offset. */
+    FILE_LSEEK_WHENCE_CUR,
+
+    /** \brief The file offset is set to the size of the file plus offset. */
+    FILE_LSEEK_WHENCE_END,
+
+    /**
+     * \brief Adjust the file offset to the next location in the file containing
+     * data; this location is greater than or equal to the offset.
+     */
+    FILE_LSEEK_WHENCE_DATA,
+
+    /**
+     * \brief Adjust the file offset to the next hole in the file greater than
+     * or equal to offset. If the offset points into the middle of a hole, then
+     * the file offset is set to that offset. If there is no hole past this
+     * offset, then the file offset is adjusted to the end of the file.
+     */
+    FILE_LSEEK_WHENCE_HOLE,
+
+} file_lseek_whence;
 
 /**
  * \brief File stats.
@@ -56,6 +88,12 @@ struct file
 
     /** \brief write method. */
     int (*file_write_method)(file*, int, const void*, size_t, size_t*);
+
+    /** \brief lseek method. */
+    int (*file_lseek_method)(file*, int, off_t, file_lseek_whence, off_t*);
+
+    /** \brief fsync method. */
+    int (*file_fsync_method)(file*, int);
 
     /** \brief context structure. */
     void* context;
@@ -218,6 +256,59 @@ int file_read(file* f, int d, void* buf, size_t max, size_t* rbytes);
  *      - VCTOOL_ERROR_FILE_UNKNOWN if an unknown error occurs.
  */
 int file_write(file* f, int d, const void* buf, size_t max, size_t* wbytes);
+
+/**
+ * \brief Reposition the read/write offset for a file descriptor.
+ *
+ * \param f         The file interface.
+ * \param d         The descriptor to be adjusted.
+ * \param offset    The new offset.
+ * \param whence    Indicates how the offset is interpreted.
+ * \param newoffset Pointer to the updated offset.
+ *
+ * \returns a status code indicating success or failure.
+ *      - VCTOOL_STATUS_SUCCESS on success.
+ *      - VCTOOL_ERROR_FILE_BAD_DESCRIPTOR if the file descriptor is invalid.
+ *      - VCTOOL_ERROR_FILE_INVALID if whence is invalid or if the resulting
+ *        file offset would be negative or beyond the end of a seekable device.
+ *      - VCTOOL_ERROR_FILE_OVERFLOW if the resulting file offset cannot be
+ *        represented as an off_t value.
+ *      - VCTOOL_ERROR_FILE_BAD_ADDRESS if the offset for
+ *        \ref FILE_LSEEK_WHENCE_DATA or \ref FILE_LSEEK_WHENCE_HOLE is beyond
+ *        the end of the file.
+ *      - VCTOOL_ERROR_FILE_IS_PIPE if the file is a pipe, socket, or FIFO,
+ *        which is not seekable.
+ *      - VCTOOL_ERROR_FILE_UNKNOWN if an unknown error has occurred.
+ */
+int file_lseek(
+    file* f, int d, off_t offset, file_lseek_whence whence, off_t* newoffset);
+
+/**
+ * \brief Synchronize the file and data, blocking until the sync is complete.
+ *
+ * \param f         The file interface.
+ * \param d         The descriptor to be synchronized with the filesystem.
+ *
+ * \note that if \ref VCTOOL_ERROR_FILE_IO, VCTOOL_ERROR_FILE_NO_SPACE, or
+ * VCTOOL_ERROR_FILE_QUOTA or \ref VCTOOL_ERROR_FILE_UNKNOWN is returned, then
+ * the process should probably panic and exit. On Linux and other flavors of
+ * Unix, a synchronization error is likely fatal beyond the life of the process,
+ * and possibly indicates bigger problems that require a human to solve. When
+ * using \ref file_fsync, a strategy should be employed to make writes and
+ * synchronization durable.
+ * 
+ * \returns a status code indicating success or failure.
+ *      - VCTOOL_STATUS_SUCCESS on success.
+ *      - VCTOOL_ERROR_FILE_BAD_DESCRIPTOR if the file descriptor is invalid.
+ *      - VCTOOL_ERROR_FILE_IO if an error occurred during synchronization.
+ *      - VCTOOL_ERROR_FILE_NO_SPACE if disk space was exhausted while
+ *        synchronizing.
+ *      - VCTOOL_ERROR_FILE_INVALID if the descriptor is bound to a file or
+ *        device that does not support synchronization.
+ *      - VCTOOL_ERROR_FILE_QUOTA if a quota issue occurred.
+ *      - VCTOOL_ERROR_FILE_UNKNOWN if an unknown error occurred.
+ */
+int file_fsync(file* f, int d);
 
 /* make this header C++ friendly. */
 #ifdef __cplusplus

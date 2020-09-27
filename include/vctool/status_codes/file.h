@@ -144,6 +144,24 @@ extern "C" {
 #define VCTOOL_ERROR_FILE_BROKEN_PIPE \
     VCTOOL_STATUS_ERROR_MACRO(VCTOOL_COMPONENT_FILE, 0x0015U)
 
+/**
+ * \brief A parameter was invalid.
+ */
+#define VCTOOL_ERROR_FILE_INVALID \
+    VCTOOL_STATUS_ERROR_MACRO(VCTOOL_COMPONENT_FILE, 0x0016U)
+
+/**
+ * \brief There was an attempt to seek to a bad file address.
+ */
+#define VCTOOL_ERROR_FILE_BAD_ADDRESS \
+    VCTOOL_STATUS_ERROR_MACRO(VCTOOL_COMPONENT_FILE, 0x0017U)
+
+/**
+ * \brief The file descriptor is a pipe or some other unexpected object.
+ */
+#define VCTOOL_ERROR_FILE_IS_PIPE \
+    VCTOOL_STATUS_ERROR_MACRO(VCTOOL_COMPONENT_FILE, 0x0018U)
+
 /* make this header C++ friendly. */
 #ifdef __cplusplus
 }
