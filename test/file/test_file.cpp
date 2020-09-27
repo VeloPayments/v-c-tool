@@ -30,6 +30,8 @@ TEST(file_init_basics)
     TEST_EXPECT(nullptr == f.file_close_method);
     TEST_EXPECT(nullptr == f.file_read_method);
     TEST_EXPECT(nullptr == f.file_write_method);
+    TEST_EXPECT(nullptr == f.file_lseek_method);
+    TEST_EXPECT(nullptr == f.file_fsync_method);
     TEST_EXPECT(nullptr == f.context);
 
     /* initialize should succeed. */
@@ -42,6 +44,8 @@ TEST(file_init_basics)
     TEST_EXPECT(nullptr != f.file_close_method);
     TEST_EXPECT(nullptr != f.file_read_method);
     TEST_EXPECT(nullptr != f.file_write_method);
+    TEST_EXPECT(nullptr != f.file_lseek_method);
+    TEST_EXPECT(nullptr != f.file_fsync_method);
     TEST_EXPECT(nullptr == f.context);
 
     /* dispose the file interface. */
@@ -67,13 +71,16 @@ TEST(file_mock_init)
     TEST_EXPECT(nullptr == f.file_close_method);
     TEST_EXPECT(nullptr == f.file_read_method);
     TEST_EXPECT(nullptr == f.file_write_method);
+    TEST_EXPECT(nullptr == f.file_lseek_method);
+    TEST_EXPECT(nullptr == f.file_fsync_method);
     TEST_EXPECT(nullptr == f.context);
 
     /* initialize should succeed. */
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
             file_mock_init(
-                &f, stubstat, stubopen, stubclose, stubread, stubwrite));
+                &f, stubstat, stubopen, stubclose, stubread, stubwrite,
+                stublseek, stubfsync));
 
     /* postconditions: all methods are set. */
     TEST_ASSERT(nullptr != f.hdr.dispose);
@@ -82,6 +89,8 @@ TEST(file_mock_init)
     TEST_EXPECT(nullptr != f.file_close_method);
     TEST_EXPECT(nullptr != f.file_read_method);
     TEST_EXPECT(nullptr != f.file_write_method);
+    TEST_EXPECT(nullptr != f.file_lseek_method);
+    TEST_EXPECT(nullptr != f.file_fsync_method);
     TEST_EXPECT(nullptr != f.context);
 
     /* calling file_stat returns VCTOOL_ERROR_FILE_UNKNOWN. */
@@ -103,6 +112,17 @@ TEST(file_mock_init)
     TEST_EXPECT(
         VCTOOL_ERROR_FILE_UNKNOWN ==
             file_write(&f, d, buf, sizeof(buf), &size));
+
+    /* calling file_lseek returns VCTOOL_ERROR_FILE_INVALID. */
+    off_t newoffset;
+    TEST_EXPECT(
+        VCTOOL_ERROR_FILE_INVALID ==
+            file_lseek(&f, d, 0, FILE_LSEEK_WHENCE_ABSOLUTE, &newoffset));
+
+    /* calling file_sync returns VCTOOL_ERROR_FILE_BAD_DESCRIPTOR. */
+    TEST_EXPECT(
+        VCTOOL_ERROR_FILE_BAD_DESCRIPTOR ==
+            file_fsync(&f, d));
 
     /* dispose the file interface. */
     dispose((disposable_t*)&f);
@@ -134,7 +154,8 @@ TEST(file_stat)
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
             file_mock_init(
-                &f, statmock, stubopen, stubclose, stubread, stubwrite));
+                &f, statmock, stubopen, stubclose, stubread, stubwrite,
+                stublseek, stubfsync));
 
     /* calling file_stat returns our code. */
     TEST_EXPECT(EXPECTED_RETURN_CODE == file_stat(&f, EXPECTED_PATH, &fst));
@@ -179,7 +200,8 @@ TEST(file_open)
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
             file_mock_init(
-                &f, stubstat, openmock, stubclose, stubread, stubwrite));
+                &f, stubstat, openmock, stubclose, stubread, stubwrite,
+                stublseek, stubfsync));
 
     /* calling file_stat returns our code. */
     TEST_EXPECT(
@@ -218,7 +240,8 @@ TEST(file_close)
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
             file_mock_init(
-                &f, stubstat, stubopen, closemock, stubread, stubwrite));
+                &f, stubstat, stubopen, closemock, stubread, stubwrite,
+                stublseek, stubfsync));
 
     /* calling file_stat returns our code. */
     TEST_EXPECT(
@@ -263,7 +286,8 @@ TEST(file_read)
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
             file_mock_init(
-                &f, stubstat, stubopen, stubclose, readmock, stubwrite));
+                &f, stubstat, stubopen, stubclose, readmock, stubwrite,
+                stublseek, stubfsync));
 
     /* calling file_stat returns our code. */
     TEST_EXPECT(
@@ -313,7 +337,8 @@ TEST(file_write)
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
             file_mock_init(
-                &f, stubstat, stubopen, stubclose, stubread, writemock));
+                &f, stubstat, stubopen, stubclose, stubread, writemock,
+                stublseek, stubfsync));
 
     /* calling file_stat returns our code. */
     TEST_EXPECT(
@@ -326,6 +351,98 @@ TEST(file_write)
     TEST_EXPECT(got_buf == EXPECTED_BUFFER);
     TEST_EXPECT(got_max == sizeof(EXPECTED_BUFFER));
     TEST_EXPECT(got_wbytes == &EXPECTED_WBYTES);
+
+    /* dispose the file interface. */
+    dispose((disposable_t*)&f);
+}
+
+/* file_lseek passes all parameters and returns the value of its impl. */
+TEST(file_lseek)
+{
+    file f;
+    int EXPECTED_DESCRIPTOR = 993;
+    off_t EXPECTED_OFFSET = -221;
+    file_lseek_whence EXPECTED_WHENCE = FILE_LSEEK_WHENCE_END;
+    off_t EXPECTED_NEWOFFSET = 0;
+    int EXPECTED_RETURN_CODE = 444;
+
+    file* got_f = nullptr;
+    int got_d = 0;
+    int got_offset = 0;
+    file_lseek_whence got_whence = (file_lseek_whence)-1;
+    off_t* got_newoffset = nullptr;
+
+    /* mock lseek. */
+    auto lseekmock = [&](
+        file* f, int d, off_t offset, file_lseek_whence whence, off_t*
+        newoffset)
+    {
+        got_f = f;
+        got_d = d;
+        got_offset = offset;
+        got_whence = whence;
+        got_newoffset = newoffset;
+
+        return EXPECTED_RETURN_CODE;
+    };
+
+    /* initialize should succeed. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS ==
+            file_mock_init(
+                &f, stubstat, stubopen, stubclose, stubread, stubwrite,
+                lseekmock, stubfsync));
+
+    /* calling file_stat returns our code. */
+    TEST_EXPECT(
+        EXPECTED_RETURN_CODE ==
+            file_lseek(
+                &f, EXPECTED_DESCRIPTOR, EXPECTED_OFFSET,
+                EXPECTED_WHENCE, &EXPECTED_NEWOFFSET));
+    TEST_EXPECT(got_f == &f);
+    TEST_EXPECT(got_d == EXPECTED_DESCRIPTOR);
+    TEST_EXPECT(got_offset == EXPECTED_OFFSET);
+    TEST_EXPECT(got_whence == EXPECTED_WHENCE);
+    TEST_EXPECT(got_newoffset == &EXPECTED_NEWOFFSET);
+
+    /* dispose the file interface. */
+    dispose((disposable_t*)&f);
+}
+
+/* file_fsync passes all parameters and returns the value of its impl. */
+TEST(file_fsync)
+{
+    file f;
+    int EXPECTED_DESCRIPTOR = 993;
+    int EXPECTED_RETURN_CODE = 444;
+
+    file* got_f = nullptr;
+    int got_d = 0;
+
+    /* mock lseek. */
+    auto fsyncmock = [&](
+        file* f, int d)
+    {
+        got_f = f;
+        got_d = d;
+
+        return EXPECTED_RETURN_CODE;
+    };
+
+    /* initialize should succeed. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS ==
+            file_mock_init(
+                &f, stubstat, stubopen, stubclose, stubread, stubwrite,
+                stublseek, fsyncmock));
+
+    /* calling file_stat returns our code. */
+    TEST_EXPECT(
+        EXPECTED_RETURN_CODE ==
+            file_fsync(
+                &f, EXPECTED_DESCRIPTOR));
+    TEST_EXPECT(got_f == &f);
+    TEST_EXPECT(got_d == EXPECTED_DESCRIPTOR);
 
     /* dispose the file interface. */
     dispose((disposable_t*)&f);

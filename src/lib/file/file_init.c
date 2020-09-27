@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <vctool/file.h>
 #include <vpr/parameters.h>
@@ -21,6 +22,8 @@ static int file_os_open(file*, int*, const char*, int, mode_t);
 static int file_os_close(file*, int);
 static int file_os_read(file*, int, void*, size_t, size_t*);
 static int file_os_write(file*, int, const void*, size_t, size_t*);
+static int file_os_lseek(file*, int, off_t, file_lseek_whence, off_t*);
+static int file_os_fsync(file*, int);
 
 /**
  * \brief Initialize a file interface backed by the operating system.
@@ -47,6 +50,8 @@ int file_init(file* f)
     f->file_close_method = &file_os_close;
     f->file_read_method = &file_os_read;
     f->file_write_method = &file_os_write;
+    f->file_lseek_method = &file_os_lseek;
+    f->file_fsync_method = &file_os_fsync;
 
     /* the file instance should now be valid. */
     MODEL_ASSERT(PROP_FILE_VALID(f));
@@ -421,5 +426,167 @@ static int file_os_write(
     /* save the number of bytes written. */
     *wbytes = retval;
 
+    return VCTOOL_STATUS_SUCCESS;
+}
+
+/**
+ * \brief Reposition the read/write offset for a file descriptor.
+ *
+ * \param f         The file interface.
+ * \param d         The descriptor to be adjusted.
+ * \param offset    The new offset.
+ * \param whence    Indicates how the offset is interpreted.
+ * \param newoffset Pointer to the updated offset.
+ *
+ * \returns a status code indicating success or failure.
+ *      - VCTOOL_STATUS_SUCCESS on success.
+ *      - VCTOOL_ERROR_FILE_BAD_DESCRIPTOR if the file descriptor is invalid.
+ *      - VCTOOL_ERROR_FILE_INVALID if whence is invalid or if the resulting
+ *        file offset would be negative or beyond the end of a seekable device.
+ *      - VCTOOL_ERROR_FILE_OVERFLOW if the resulting file offset cannot be
+ *        represented as an off_t value.
+ *      - VCTOOL_ERROR_FILE_BAD_ADDRESS if the offset for
+ *        \ref FILE_LSEEK_WHENCE_DATA or \ref FILE_LSEEK_WHENCE_HOLE is beyond
+ *        the end of the file.
+ *      - VCTOOL_ERROR_FILE_IS_PIPE if the file is a pipe, socket, or FIFO,
+ *        which is not seekable.
+ *      - VCTOOL_ERROR_FILE_UNKNOWN if an unknown error has occurred.
+ */
+static int file_os_lseek(
+    file* UNUSED(f), int d, off_t offset, file_lseek_whence whence,
+    off_t* newoffset)
+{
+    /* parameter sanity checks. */
+    MODEL_ASSERT(PROP_FILE_VALID(f));
+    MODEL_ASSERT(d >= 0);
+    MODEL_ASSERT(
+           FILE_LSEEK_WHENCE_ABSOLUTE == whence
+        || FILE_LSEEK_WHENCE_CUR == whence
+        || FILE_LSEEK_WHENCE_END == whence
+        || FILE_LSEEK_WHENCE_DATA == whence
+        || FILE_LSEEK_WHENCE_HOLE == whence);
+
+    /* decode whence. */
+    int os_whence = 0;
+    switch (whence)
+    {
+        case FILE_LSEEK_WHENCE_ABSOLUTE:
+            os_whence = SEEK_SET;
+            break;
+
+        case FILE_LSEEK_WHENCE_CUR:
+            os_whence = SEEK_CUR;
+            break;
+
+        case FILE_LSEEK_WHENCE_END:
+            os_whence = SEEK_END;
+            break;
+
+        /* These are Linux extensions. */
+#ifdef _GNU_SOURCE
+        case FILE_LSEEK_WHENCE_DATA:
+            os_whence = SEEK_DATA;
+            break;
+
+        case FILE_LSEEK_WHENCE_HOLE:
+            os_whence = SEEK_HOLE;
+            break;
+#endif
+
+        default:
+            return VCTOOL_ERROR_FILE_INVALID;
+    }
+
+    /* attempt to perform the lseek operation. */
+    off_t retval = lseek(d, offset, os_whence);
+    if (retval < 0)
+    {
+        switch (errno)
+        {
+            case EBADF:
+                return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+
+            case EINVAL:
+                return VCTOOL_ERROR_FILE_INVALID;
+
+            case ENXIO:
+                return VCTOOL_ERROR_FILE_BAD_ADDRESS;
+
+            case EOVERFLOW:
+                return VCTOOL_ERROR_FILE_OVERFLOW;
+
+            case ESPIPE:
+                return VCTOOL_ERROR_FILE_IS_PIPE;
+
+            default:
+                return VCTOOL_ERROR_FILE_UNKNOWN;
+        }
+    }
+
+    /* assign newoffset on success. */
+    *newoffset = retval;
+
+    return VCTOOL_STATUS_SUCCESS;
+}
+
+/**
+ * \brief Synchronize the file and data, blocking until the sync is complete.
+ *
+ * \param f         The file interface.
+ * \param d         The descriptor to be synchronized with the filesystem.
+ *
+ * \note that if \ref VCTOOL_ERROR_FILE_IO, VCTOOL_ERROR_FILE_NO_SPACE, or
+ * VCTOOL_ERROR_FILE_QUOTA or \ref VCTOOL_ERROR_FILE_UNKNOWN is returned, then
+ * the process should probably panic and exit. On Linux and other flavors of
+ * Unix, a synchronization error is likely fatal beyond the life of the process,
+ * and possibly indicates bigger problems that require a human to solve. When
+ * using \ref file_fsync, a strategy should be employed to make writes and
+ * synchronization durable.
+ * 
+ * \returns a status code indicating success or failure.
+ *      - VCTOOL_STATUS_SUCCESS on success.
+ *      - VCTOOL_ERROR_FILE_BAD_DESCRIPTOR if the file descriptor is invalid.
+ *      - VCTOOL_ERROR_FILE_IO if an error occurred during synchronization.
+ *      - VCTOOL_ERROR_FILE_NO_SPACE if disk space was exhausted while
+ *        synchronizing.
+ *      - VCTOOL_ERROR_FILE_INVALID if the descriptor is bound to a file or
+ *        device that does not support synchronization.
+ *      - VCTOOL_ERROR_FILE_QUOTA if a quota issue occurred.
+ *      - VCTOOL_ERROR_FILE_UNKNOWN if an unknown error occurred.
+ */
+static int file_os_fsync(file* UNUSED(f), int d)
+{
+   /* parameter sanity checks. */
+    MODEL_ASSERT(PROP_FILE_VALID(f));
+    MODEL_ASSERT(d >= 0);
+
+    /* attempt to perform the lseek operation. */
+    int retval = fsync(d);
+    if (0 != retval)
+    {
+        switch (errno)
+        {
+            case EBADF:
+                return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+
+            case EIO:
+                return VCTOOL_ERROR_FILE_IO;
+
+            case ENOSPC:
+                return VCTOOL_ERROR_FILE_NO_SPACE;
+
+            case EROFS: /* fall-through */
+            case EINVAL:
+                return VCTOOL_ERROR_FILE_INVALID;
+
+            case EDQUOT:
+                return VCTOOL_ERROR_FILE_QUOTA;
+
+            default:
+                return VCTOOL_ERROR_FILE_UNKNOWN;
+        }
+    }
+
+    /* success. */
     return VCTOOL_STATUS_SUCCESS;
 }

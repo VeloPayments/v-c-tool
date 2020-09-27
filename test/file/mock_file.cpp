@@ -19,6 +19,8 @@ static int mock_file_open(file*, int*, const char*, int, mode_t);
 static int mock_file_close(file*, int);
 static int mock_file_read(file*, int, void*, size_t, size_t*);
 static int mock_file_write(file*, int, const void*, size_t, size_t*);
+static int mock_file_lseek(file*, int, off_t, file_lseek_whence, off_t*);
+static int mock_file_fsync(file*, int);
 
 /**
  * \brief Stub for stat.
@@ -66,6 +68,24 @@ const function<int (file*, int, const void*, size_t, size_t*)> stubwrite =
     };
 
 /**
+ * \brief Stub for lseek.
+ */
+const function<int (file*, int, off_t, file_lseek_whence, off_t*)> stublseek =
+    [](file*, int, off_t, file_lseek_whence, off_t*)
+    {
+        return VCTOOL_ERROR_FILE_INVALID;
+    };
+
+/**
+ * \brief Stub for fsync.
+ */
+const function<int (file*, int)> stubfsync =
+    [](file*, int)
+    {
+        return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+    };
+
+/**
  * \brief Initialize a mock file interface.
  *
  * \param f             The file interface to initialize.
@@ -74,6 +94,8 @@ const function<int (file*, int, const void*, size_t, size_t*)> stubwrite =
  * \param mockclose     The mock close function.
  * \param mockread      The mock read function.
  * \param mockwrite     The mock write function.
+ * \param mocklseek     The mock lseek function.
+ * \param mockfsync     The mock fsync function.
  *
  * \returns a status code indicating success or failure.
  *      - VCTOOL_STATUS_SUCCESS on success.
@@ -85,7 +107,9 @@ int file_mock_init(
     std::function<int (file*, int*, const char*, int, mode_t)> mockopen,
     std::function<int (file*, int)> mockclose,
     std::function<int (file*, int, void*, size_t, size_t*)> mockread,
-    std::function<int (file*, int, const void*, size_t, size_t*)> mockwrite)
+    std::function<int (file*, int, const void*, size_t, size_t*)> mockwrite,
+    std::function<int (file*, int, off_t, file_lseek_whence, off_t*)> mocklseek,
+    std::function<int (file*, int)> mockfsync)
 {
     mock_file* ctx = new mock_file;
 
@@ -94,6 +118,8 @@ int file_mock_init(
     ctx->mockclose = mockclose;
     ctx->mockread = mockread;
     ctx->mockwrite = mockwrite;
+    ctx->mocklseek = mocklseek;
+    ctx->mockfsync = mockfsync;
 
     memset(f, 0, sizeof(file));
 
@@ -103,6 +129,8 @@ int file_mock_init(
     f->file_close_method = &mock_file_close;
     f->file_read_method = &mock_file_read;
     f->file_write_method = &mock_file_write;
+    f->file_lseek_method = &mock_file_lseek;
+    f->file_fsync_method = &mock_file_fsync;
     f->context = (void*)ctx;
 
     return VCTOOL_STATUS_SUCCESS;
@@ -169,4 +197,25 @@ static int mock_file_write(
     mock_file* ctx = (mock_file*)f->context;
 
     return ctx->mockwrite(f, d, buf, sz, psz);
+}
+
+/**
+ * \brief Run the mock for this file lseek.
+ */
+static int mock_file_lseek(
+    file* f, int d, off_t offset, file_lseek_whence whence, off_t* newoffset)
+{
+    mock_file* ctx = (mock_file*)f->context;
+
+    return ctx->mocklseek(f, d, offset, whence, newoffset);
+}
+
+/**
+ * \brief Run the mock for this file fsync.
+ */
+static int mock_file_fsync(file* f, int d)
+{
+    mock_file* ctx = (mock_file*)f->context;
+
+    return ctx->mockfsync(f, d);
 }
