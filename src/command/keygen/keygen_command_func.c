@@ -66,7 +66,7 @@ int keygen_command_func(commandline_opts* opts)
     /* get a passphrase for this file. */
     printf("Enter passphrase : ");
     fflush(stdout);
-    retval = readpassword(opts, &password_buffer);
+    retval = readpassword(opts->suite, &password_buffer);
     if (VCCRYPT_STATUS_SUCCESS != retval)
     {
         printf("Failure.\n");
@@ -82,7 +82,7 @@ int keygen_command_func(commandline_opts* opts)
     {
         printf("Verify passphrase: ");
         fflush(stdout);
-        retval = readpassword(opts, &verify_buffer);
+        retval = readpassword(opts->suite, &verify_buffer);
         if (VCCRYPT_STATUS_SUCCESS != retval)
         {
             printf("Failure.\n");
@@ -120,7 +120,7 @@ int keygen_command_func(commandline_opts* opts)
         /* encrypt the certificate. */
         retval =
             certificate_encrypt(
-                opts, &encrypted_cert, &private_cert, &password_buffer,
+                opts->suite, &encrypted_cert, &private_cert, &password_buffer,
                 root->key_derivation_rounds);
         if (VCTOOL_STATUS_SUCCESS != retval)
         {

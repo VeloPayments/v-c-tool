@@ -57,7 +57,7 @@ int pubkey_certificate_create(
 /**
  * \brief Encrypt a certificate using the given password.
  *
- * \param opts              The command-line options to use.
+ * \param suite             The crypto suite to use to encrypt the certificate.
  * \param encrypted_cert    Pointer to the pointer to receive an allocated
  *                          vccrypt_buffer_t instance holding the encrypted
  *                          certificate on function success.
@@ -71,14 +71,14 @@ int pubkey_certificate_create(
  *      - a non-zero error code on failure.
  */
 int certificate_encrypt(
-    commandline_opts* opts, vccrypt_buffer_t** encrypted_cert,
+    vccrypt_suite_options_t* suite, vccrypt_buffer_t** encrypted_cert,
     const vccrypt_buffer_t* cert, const vccrypt_buffer_t* password,
     unsigned int rounds);
 
 /**
  * \brief Decrypt a certificate using the given password.
  *
- * \param opts              The command-line options to use.
+ * \param suite             The crypto suite to use to decrypt the certificate.
  * \param cert              Pointer to the pointer to receive an allocated
  *                          vccrypt_buffer_t instance holding the decrypted
  *                          certificate on function success.
@@ -90,7 +90,7 @@ int certificate_encrypt(
  *      - a non-zero error code on failure.
  */
 int certificate_decrypt(
-    commandline_opts* opts, vccrypt_buffer_t** cert,
+    vccrypt_suite_options_t* suite, vccrypt_buffer_t** cert,
     const vccrypt_buffer_t* encrypted_cert, const vccrypt_buffer_t* password);
 
 /* make this header C++ friendly. */
