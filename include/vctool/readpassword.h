@@ -19,7 +19,7 @@ extern "C" {
 /**
  * \brief Read a password from standard input.
  *
- * \param opts              The command-line options.
+ * \param suite             The crypto suite to use to read the password.
  * \param passbuffer        Pointer to a vccrypt_buffer_t to be initialized with
  *                          the password / passphrase that has been read.
  *
@@ -27,7 +27,7 @@ extern "C" {
  *      - VCTOOL_STATUS_SUCCESS on success.
  *      - a non-zero error code on failure.
  */
-int readpassword(commandline_opts* opts, vccrypt_buffer_t* passbuffer);
+int readpassword(vccrypt_suite_options_t* suite, vccrypt_buffer_t* passbuffer);
 
 /* make this header C++ friendly. */
 #ifdef __cplusplus

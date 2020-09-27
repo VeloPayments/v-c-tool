@@ -17,7 +17,7 @@
 /**
  * \brief Decrypt a certificate using the given password.
  *
- * \param opts              The command-line options to use.
+ * \param suite             The crypto suite to use to decrypt the certificate.
  * \param cert              Pointer to the pointer to receive an allocated
  *                          vccrypt_buffer_t instance holding the decrypted
  *                          certificate on function success.
@@ -29,7 +29,7 @@
  *      - a non-zero error code on failure.
  */
 int certificate_decrypt(
-    commandline_opts* opts, vccrypt_buffer_t** cert,
+    vccrypt_suite_options_t* suite, vccrypt_buffer_t** cert,
     const vccrypt_buffer_t* encrypted_cert, const vccrypt_buffer_t* password)
 {
     int retval;
@@ -39,7 +39,7 @@ int certificate_decrypt(
     vccrypt_mac_context_t mac;
 
     /* parameter sanity checks. */
-    MODEL_ASSERT(PROP_VALID_COMMANDLINE_OPTS(opts));
+    MODEL_ASSERT(NULL != suite);
     MODEL_ASSERT(NULL != cert);
     MODEL_ASSERT(NULL != encrypted_cert);
     MODEL_ASSERT(NULL != password);
@@ -47,7 +47,7 @@ int certificate_decrypt(
     /* create mac buffer. */
     retval =
         vccrypt_suite_buffer_init_for_mac_authentication_code(
-            opts->suite, &mac_buffer, false);
+            suite, &mac_buffer, false);
     if (VCCRYPT_STATUS_SUCCESS != retval)
     {
         goto done;
@@ -57,21 +57,21 @@ int certificate_decrypt(
     /* TODO - replace with suite method. */
     retval = 
         vccrypt_buffer_init(
-            &salt, opts->suite->alloc_opts,
-            opts->suite->stream_cipher_opts.key_size);
+            &salt, suite->alloc_opts,
+            suite->stream_cipher_opts.key_size);
     if (VCCRYPT_STATUS_SUCCESS != retval)
     {
         goto cleanup_mac_buffer;
     }
 
     /* compute the minimum size of the encrypted certificate. */
-    size_t iv_size = opts->suite->stream_cipher_opts.IV_size;
+    size_t iv_size = suite->stream_cipher_opts.IV_size;
     size_t min_encrypted_cert_size =
           ENCRYPTED_CERT_MAGIC_SIZE             /* "ENC" */
         + sizeof(uint32_t)                      /* number of rounds in key. */
         + salt.size                             /* the salt. */
         + iv_size                               /* the iv. */
-        + opts->suite->mac_opts.mac_size;       /* the mac. */
+        + suite->mac_opts.mac_size;             /* the mac. */
 
     /* verify that the cert is at least this size. */
     if (encrypted_cert->size < min_encrypted_cert_size)
@@ -105,7 +105,7 @@ int certificate_decrypt(
     /* create the mac and cipher instances. */
     retval =
         crypt_cipher_mac_init_from_password(
-            &cipher, &mac, opts->suite, password, &salt, rounds);
+            &cipher, &mac, suite, password, &salt, rounds);
     if (VCTOOL_STATUS_SUCCESS != retval)
     {
         goto cleanup_salt;
@@ -123,7 +123,7 @@ int certificate_decrypt(
 
     retval =
         vccrypt_buffer_init(
-            *cert, opts->suite->alloc_opts,
+            *cert, suite->alloc_opts,
             encrypted_cert->size - min_encrypted_cert_size);
     if (VCCRYPT_STATUS_SUCCESS != retval)
     {

@@ -38,7 +38,7 @@ static bool exit_loop_error;
 /**
  * \brief Read a password from standard input.
  *
- * \param opts              The command-line options.
+ * \param suite             The crypto suite to use to read the password.
  * \param passbuffer        Pointer to a vccrypt_buffer_t to be initialized with
  *                          the password / passphrase that has been read.
  *
@@ -46,7 +46,7 @@ static bool exit_loop_error;
  *      - VCTOOL_STATUS_SUCCESS on success.
  *      - a non-zero error code on failure.
  */
-int readpassword(commandline_opts* opts, vccrypt_buffer_t* passbuffer)
+int readpassword(vccrypt_suite_options_t* suite, vccrypt_buffer_t* passbuffer)
 {
     int retval;
     readpassword_savestate state;
@@ -55,7 +55,7 @@ int readpassword(commandline_opts* opts, vccrypt_buffer_t* passbuffer)
     char ch = 0;
 
     /* parameter sanity checks. */
-    MODEL_ASSERT(PROP_VALID_COMMANDLINE_OPTS(opts));
+    MODEL_ASSERT(NULL != suite);
     MODEL_ASSERT(NULL != passbuffer);
 
     /* Get current terminal flags. */
@@ -140,7 +140,7 @@ int readpassword(commandline_opts* opts, vccrypt_buffer_t* passbuffer)
     /* allocate the password buffer. */
     retval =
         vccrypt_buffer_init(
-            passbuffer, opts->suite->alloc_opts, password_offset);
+            passbuffer, suite->alloc_opts, password_offset);
     if (VCCRYPT_STATUS_SUCCESS != retval)
     {
         goto cleanup_buffer;

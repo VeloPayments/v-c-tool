@@ -160,7 +160,7 @@ int pubkey_command_func(commandline_opts* opts)
         /* Yes: read password and decrypt. */
         printf("Enter passphrase: ");
         fflush(stdout);
-        retval = readpassword(opts, &password_buffer);
+        retval = readpassword(opts->suite, &password_buffer);
         if (VCTOOL_STATUS_SUCCESS != retval)
         {
             printf("Failure.\n");
@@ -169,7 +169,8 @@ int pubkey_command_func(commandline_opts* opts)
         printf("\n");
 
         retval =
-            certificate_decrypt(opts, &decrypted_cert, &cert, &password_buffer);
+            certificate_decrypt(
+                opts->suite, &decrypted_cert, &cert, &password_buffer);
         if (VCTOOL_STATUS_SUCCESS != retval)
         {
             fprintf(stderr, "Error decrypting %s.\n", key_filename);

@@ -15,7 +15,7 @@
 /**
  * \brief Encrypt a certificate using the given password.
  *
- * \param opts              The command-line options to use.
+ * \param suite             The crypto suite to use to encrypt the certificate.
  * \param encrypted_cert    Pointer to the pointer to receive an allocated
  *                          vccrypt_buffer_t instance holding the encrypted
  *                          certificate on function success.
@@ -29,7 +29,7 @@
  *      - a non-zero error code on failure.
  */
 int certificate_encrypt(
-    commandline_opts* opts, vccrypt_buffer_t** encrypted_cert,
+    vccrypt_suite_options_t* suite, vccrypt_buffer_t** encrypted_cert,
     const vccrypt_buffer_t* cert, const vccrypt_buffer_t* password,
     unsigned int rounds)
 {
@@ -42,7 +42,7 @@ int certificate_encrypt(
     size_t offset = 0;
 
     /* parameter sanity checks. */
-    MODEL_ASSERT(PROP_VALID_COMMANDLINE_OPTS(opts));
+    MODEL_ASSERT(NULL != suite);
     MODEL_ASSERT(NULL != encrypted_cert);
     MODEL_ASSERT(NULL != cert);
     MODEL_ASSERT(NULL != password);
@@ -52,8 +52,8 @@ int certificate_encrypt(
     /* TODO - replace with suite method. */
     retval =
         vccrypt_buffer_init(
-            &salt, opts->suite->alloc_opts,
-            opts->suite->stream_cipher_opts.key_size);
+            &salt, suite->alloc_opts,
+            suite->stream_cipher_opts.key_size);
     if (VCCRYPT_STATUS_SUCCESS != retval)
     {
         goto done;
@@ -63,8 +63,8 @@ int certificate_encrypt(
     /* TODO - replace with suite method. */
     retval =
         vccrypt_buffer_init(
-            &iv, opts->suite->alloc_opts,
-            opts->suite->stream_cipher_opts.IV_size);
+            &iv, suite->alloc_opts,
+            suite->stream_cipher_opts.IV_size);
     if (VCCRYPT_STATUS_SUCCESS != retval)
     {
         goto cleanup_salt;
@@ -73,14 +73,14 @@ int certificate_encrypt(
     /* create a buffer for holding the mac. */
     retval =
         vccrypt_suite_buffer_init_for_mac_authentication_code(
-            opts->suite, &mac_buffer, false);
+            suite, &mac_buffer, false);
     if (VCCRYPT_STATUS_SUCCESS != retval)
     {
         goto cleanup_iv;
     }
 
     /* create prng instance for getting salt and iv. */
-    retval = vccrypt_suite_prng_init(opts->suite, &prng);
+    retval = vccrypt_suite_prng_init(suite, &prng);
     if (VCCRYPT_STATUS_SUCCESS != retval)
     {
         goto cleanup_mac_buffer;
@@ -103,7 +103,7 @@ int certificate_encrypt(
     /* create the mac and cipher instances. */
     retval =
         crypt_cipher_mac_init_from_password(
-            &cipher, &mac, opts->suite, password, &salt, rounds);
+            &cipher, &mac, suite, password, &salt, rounds);
     if (VCTOOL_STATUS_SUCCESS != retval)
     {
         goto cleanup_prng;
@@ -116,7 +116,7 @@ int certificate_encrypt(
         + salt.size                             /* the salt. */
         + iv.size                               /* the iv. */
         + cert->size                            /* the encrypted certificate. */
-        + opts->suite->mac_opts.mac_size;       /* the mac. */
+        + suite->mac_opts.mac_size;             /* the mac. */
 
     /* allocate space for the encrypted certificate. */
     *encrypted_cert = (vccrypt_buffer_t*)malloc(sizeof(vccrypt_buffer_t));
@@ -128,7 +128,7 @@ int certificate_encrypt(
     /* create the encrypted cert. */
     retval =
         vccrypt_buffer_init(
-            *encrypted_cert, opts->suite->alloc_opts, encrypted_cert_size);
+            *encrypted_cert, suite->alloc_opts, encrypted_cert_size);
     if (VCCRYPT_STATUS_SUCCESS != retval)
     {
         goto free_encrypted_cert;
