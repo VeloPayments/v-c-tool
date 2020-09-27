@@ -26,6 +26,11 @@ test_src = run_command(
     check : true
 ).stdout().strip().split('\n')
 
+lib_src = run_command(
+    'find', './src/lib', '-name', '*.c',
+    check : true
+).stdout().strip().split('\n')
+
 vcblockchain = dependency(
     'vcblockchain',
     required : true,
@@ -53,6 +58,11 @@ vctool_test = executable(
     src_not_main, test_src,
     include_directories : vctool_include,
     dependencies : [threads, vcblockchain, minunit]
+)
+
+vctool_lib = static_library('vctool', lib_src,
+    include_directories : vctool_include,
+    dependencies : [vcblockchain]
 )
 
 test(
