@@ -65,6 +65,11 @@ vctool_lib = static_library('vctool', lib_src,
     dependencies : [vcblockchain]
 )
 
+vctool_dep = declare_dependency(
+  link_with : vctool_lib,
+  include_directories : vctool_include
+)
+
 test(
     'vctool-test',
     vctool_test,
