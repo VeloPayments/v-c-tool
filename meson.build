@@ -17,7 +17,7 @@ bison = find_program('bison', required : true)
 
 src_not_main = run_command(
     'find', './src', '(', '-name', '*.c', '-or', '-name', '*.h' , ')', 
-            '-not', '-name', 'main.c',
+            '!', '-name', 'main.c',
     check : true
 ).stdout().strip().split('\n')
 
