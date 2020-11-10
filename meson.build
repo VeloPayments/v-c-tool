@@ -37,6 +37,15 @@ vcblockchain = dependency(
     fallback : ['vcblockchain', 'vcblockchain_dep']
 )
 
+vccrypt = dependency(
+    'vccrypt',
+    required : true,
+    fallback : ['vccrypt', 'vccrypt_dep']
+)
+
+vccrypt_sub = subproject('vccrypt')
+vccrypt_mock_lib = vccrypt_sub.get_variable('vccrypt_mock_lib')
+
 cmake = import('cmake')
 minunit_proj = cmake.subproject('minunit')
 minunit = minunit_proj.dependency('minunit')
@@ -57,7 +66,8 @@ vctool_test = executable(
     'vctool-test',
     src_not_main, test_src,
     include_directories : vctool_include,
-    dependencies : [threads, vcblockchain, minunit]
+    dependencies : [threads, vcblockchain, vccrypt, minunit],
+    link_with : [vccrypt_mock_lib]
 )
 
 vctool_lib = static_library('vctool', lib_src,
