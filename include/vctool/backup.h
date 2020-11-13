@@ -10,7 +10,8 @@
 # define VCTOOL_BACKUP_HEADER_GUARD
 
 #include <stdint.h>
-#include <vccrypt/buffer.h>
+#include <vccrypt/suite.h>
+#include <vctool/file.h>
 #include <vpr/disposable.h>
 #include <vpr/uuid.h>
 
@@ -57,6 +58,9 @@ struct backup_file_enc_header
     /** \brief The number of rounds used in the PBKDRF for this key. */
     uint64_t rounds;
 
+    /** \brief The salt for deriving the passphrase key. */
+    uint8_t passphrase_salt[32];
+
     /** \brief The encrypted key in AES-2X-256-CBC. */
     uint8_t enc_key[48];
 
@@ -70,7 +74,7 @@ struct backup_file_enc_header
 #define BACKUP_FILE_SIZE_FILE_ENC_HEADER \
     (   ( 8 * sizeof(uint8_t))      /* the magic. */ \
       +       sizeof(uint64_t)      /* the number of rounds. */ \
-      + (48 * sizeof(uint8_t))      /* the encrypted key. */ \
+      + (32 * sizeof(uint8_t))      /* the passphrase salt. */ \
       + (48 * sizeof(uint8_t))      /* the encrypted key. */ \
       + (32 * sizeof(uint8_t)))     /* the record mac. */
 
@@ -228,6 +232,48 @@ struct backup_record_block
       + (16 * sizeof(uint8_t))              /* block id. */ \
       +       sizeof(uint64_t)              /* block height. */ \
       +       sizeof(uint64_t))             /* block size. */ \
+
+/**
+ * \brief Write a backup file encryption header to a file instance.
+ *
+ * \param f                 The file instance to which this header is written.
+ * \param desc              The file descriptor to which this header is written.
+ * \param suite             The crypto suite to use for this operation.
+ * \param passphrase        The passphrase to be used to decrypt this file.
+ * \param rounds            The number of rounds to use to derive an encryption
+ *                          key from the passphrase.
+ *
+ * \returns a status code indicating success or failure.
+ *      - VCTOOL_STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+int backup_file_encryption_header_write(
+    file* f, int desc, vccrypt_suite_options_t* suite,
+    vccrypt_buffer_t* passphrase, uint64_t rounds);
+
+/**
+ * \brief Read a backup file encryption header from the given file instance.
+ *
+ * \param f                 The file instance from which the header is read.
+ * \param desc              The file descriptor from which the header is read.
+ * \param suite             The crypto suite to use for this operation.
+ * \param passphrase        The passphrase to be used to decrypt this file.
+ * \param header            Pointer to the header to be read by this operation.
+ *                          On success, this header is owned by the caller and
+ *                          must be disposed when no longer needed.
+ * \param key               Pointer to an uninitialized buffer to be initialized
+ *                          with the decrypted file key on success. On success,
+ *                          this key buffer is owned by the caller and must be
+ *                          disposed when no longer needed.
+ *
+ * \returns a status code indicating success or failure.
+ *      - VCTOOL_STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+int backup_file_encryption_header_read(
+    file* f, int desc, vccrypt_suite_options_t* suite,
+    vccrypt_buffer_t* passphrase, backup_file_enc_header* header,
+    vccrypt_buffer_t* key);
 
 /* make this header C++ friendly. */
 #ifdef __cplusplus

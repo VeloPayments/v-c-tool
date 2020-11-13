@@ -43,6 +43,11 @@ enum vctool_components
      * \brief certificate Component.
      */
     VCTOOL_COMPONENT_CERTIFICATE = 0x04U,
+
+    /**
+     * \brief backup Component.
+     */
+    VCTOOL_COMPONENT_BACKUP = 0x05U,
 };
 
 /* make this header C++ friendly. */
