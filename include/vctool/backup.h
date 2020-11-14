@@ -44,6 +44,9 @@ enum backup_record_type
     BACKUP_RECORD_TYPE_BLOCK,
 };
 
+/** \brief The current version is 0.1 */
+#define BACKUP_FILE_ENC_HEADER_SERIALIZATION_VERSION 0x0000000010000000UL
+
 /**
  * \brief At the beginning of the backup file is this encryption header.
  */
@@ -54,6 +57,12 @@ struct backup_file_enc_header
 
     /** \brief "MAGIC" for this file. "ENCVCBAK*/
     uint8_t file_magic[8];
+
+    /** \brief The serialization version of this file. */
+    uint64_t serialization_version;
+
+    /** \brief The size of this record. */
+    uint64_t record_size;
 
     /** \brief The number of rounds used in the PBKDRF for this key. */
     uint64_t rounds;
@@ -73,6 +82,8 @@ struct backup_file_enc_header
  */
 #define BACKUP_FILE_SIZE_FILE_ENC_HEADER \
     (   ( 8 * sizeof(uint8_t))      /* the magic. */ \
+      +       sizeof(uint64_t)      /* the serialization version. */ \
+      +       sizeof(uint64_t)      /* the total record size. */ \
       +       sizeof(uint64_t)      /* the number of rounds. */ \
       + (32 * sizeof(uint8_t))      /* the passphrase salt. */ \
       + (48 * sizeof(uint8_t))      /* the encrypted key. */ \
