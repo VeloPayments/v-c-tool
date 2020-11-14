@@ -10,6 +10,7 @@
 #include <iostream>
 #include <minunit/minunit.h>
 #include <string.h>
+#include <vcblockchain/byteswap.h>
 #include <vccrypt/mock_suite.h>
 #include <vctool/backup.h>
 #include <vector>
@@ -397,6 +398,16 @@ TEST(happy_path)
     TEST_EXPECT(mac_digest_called);
     /* the first 8 bytes are set correctly. */
     TEST_EXPECT(!memcmp(hdr, "ENCVCBAK", 8));
+    /* the next 8 bytes are set to the serialization version. */
+    uint64_t net_serial_version =
+        htonll(BACKUP_FILE_ENC_HEADER_SERIALIZATION_VERSION);
+    TEST_EXPECT(!memcmp(hdr + 8, &net_serial_version, 8));
+    /* the next 8 bytes are set to the record size. */
+    uint64_t net_record_size = htonll(BACKUP_FILE_SIZE_FILE_ENC_HEADER);
+    TEST_EXPECT(!memcmp(hdr + 16, &net_record_size, 8));
+    /* the next 8 bytes are set to the number of rounds. */
+    uint64_t net_rounds = htonll(rounds);
+    TEST_EXPECT(!memcmp(hdr + 24, &net_rounds, 8));
 
     /* mac finalize called. */
     TEST_EXPECT(mac_finalize_called);

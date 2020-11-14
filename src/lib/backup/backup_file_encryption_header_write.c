@@ -205,6 +205,17 @@ int backup_file_encryption_header_write(
     /* write the file magic to the header. */
     memcpy(buf, "ENCVCBAK", 8); buf += 8;
 
+    /* write the serialization version to the header. */
+    uint64_t net_serial_version =
+        htonll(BACKUP_FILE_ENC_HEADER_SERIALIZATION_VERSION);
+    memcpy(buf, &net_serial_version, sizeof(net_serial_version));
+    buf += sizeof(net_serial_version);
+
+    /* write the record size to the header. */
+    uint64_t net_record_size = htonll(BACKUP_FILE_SIZE_FILE_ENC_HEADER);
+    memcpy(buf, &net_record_size, sizeof(net_record_size));
+    buf += sizeof(net_record_size);
+
     /* write the rounds to the header. */
     uint64_t net_rounds = htonll(rounds);
     memcpy(buf, &net_rounds, sizeof(net_rounds)); buf += sizeof(net_rounds);
