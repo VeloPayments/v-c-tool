@@ -1,5 +1,5 @@
 /**
- * \file test/file/test_backup_structs.cpp
+ * \file test/file/test_backup_file_encryption_header_write.cpp
  *
  * \brief Unit tests for backup_file_encryption_header_write.
  *
@@ -22,9 +22,6 @@ using namespace std;
 
 /* start of the test suite. */
 TEST_SUITE(backup_file_encryption_header_write);
-
-#include <iostream>
-using namespace std;
 
 /* Verify that parameters are null checked. */
 TEST(parameter_checks)
