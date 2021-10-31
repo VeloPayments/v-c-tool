@@ -22,6 +22,7 @@ void help_print(FILE* out)
     fprintf(out, "   %-12s Set output filename.\n", "-o file");
     fprintf(out, "   %-12s Number of key derivation rounds.\n", "-R num");
     fprintf(out, "   %-12s The private keypair file.\n", "-k file");
+    fprintf(out, "   %-12s Non-Interative mode.\n", "-N");
     fprintf(out, "\n");
     fprintf(out, "Commands:\n");
     fprintf(out, "   %-12s Print this help menu.\n", "help");

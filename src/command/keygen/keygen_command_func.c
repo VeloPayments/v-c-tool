@@ -63,47 +63,61 @@ int keygen_command_func(commandline_opts* opts)
         goto done;
     }
 
-    /* get a passphrase for this file. */
-    printf("Enter passphrase : ");
-    fflush(stdout);
-    retval = readpassword(opts->suite, &password_buffer);
-    if (VCCRYPT_STATUS_SUCCESS != retval)
+    /* has interactive mode been disabled? */
+    if (root->non_interactive)
     {
-        printf("Failure.\n");
-        goto done;
-    }
-    else
-    {
-        printf("\n");
-    }
-
-    /* read verification passphrase. */
-    if (password_buffer.size > 0)
-    {
-        printf("Verify passphrase: ");
-        fflush(stdout);
-        retval = readpassword(opts->suite, &verify_buffer);
+        retval = blankpassword(opts->suite, &password_buffer);
         if (VCCRYPT_STATUS_SUCCESS != retval)
         {
             printf("Failure.\n");
-            goto cleanup_password_buffer;
+            goto done;
+        }
+    }
+    else
+    {
+        /* get a passphrase for this file. */
+        printf("Enter passphrase : ");
+        fflush(stdout);
+        retval = readpassword(opts->suite, &password_buffer);
+        if (VCCRYPT_STATUS_SUCCESS != retval)
+        {
+            printf("Failure.\n");
+            goto done;
         }
         else
         {
             printf("\n");
         }
 
-        /* verify that the two match. */
-        if ( password_buffer.size != verify_buffer.size
-          || crypto_memcmp(
-                password_buffer.data, verify_buffer.data, password_buffer.size))
+        /* read verification passphrase. */
+        if (password_buffer.size > 0)
         {
-            fprintf(stderr, "Passphrases do not match.\n");
-            dispose((disposable_t*)&verify_buffer);
-            goto cleanup_password_buffer;
-        }
+            printf("Verify passphrase: ");
+            fflush(stdout);
+            retval = readpassword(opts->suite, &verify_buffer);
+            if (VCCRYPT_STATUS_SUCCESS != retval)
+            {
+                printf("Failure.\n");
+                goto cleanup_password_buffer;
+            }
+            else
+            {
+                printf("\n");
+            }
 
-        dispose((disposable_t*)&verify_buffer);
+            /* verify that the two match. */
+            if ( password_buffer.size != verify_buffer.size
+              || crypto_memcmp(
+                    password_buffer.data, verify_buffer.data,
+                    password_buffer.size))
+            {
+                fprintf(stderr, "Passphrases do not match.\n");
+                dispose((disposable_t*)&verify_buffer);
+                goto cleanup_password_buffer;
+            }
+
+            dispose((disposable_t*)&verify_buffer);
+        }
     }
 
     /* generate a private certificate with a generated key. */
