@@ -6,6 +6,7 @@ subprojects/googletest
 subprojects/libevent
 subprojects/lmdb
 subprojects/minunit
+subprojects/rcpr
 subprojects/vcblockchain
 subprojects/vccert
 subprojects/vccrypt
