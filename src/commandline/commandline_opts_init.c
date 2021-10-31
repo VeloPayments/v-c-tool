@@ -73,7 +73,7 @@ int commandline_opts_init(
     opts->cmd = (command*)root;
 
     /* read through command-line options. */
-    while ((ch = getopt(argc, argv, "?R:hk:o:")) != -1)
+    while ((ch = getopt(argc, argv, "?NR:hk:o:")) != -1)
     {
         switch (ch)
         {
@@ -90,6 +90,10 @@ int commandline_opts_init(
                     goto dispose_opts;
                 }
                 root->key_filename = strdup(optarg);
+                break;
+
+            case 'N':
+                root->non_interactive = true;
                 break;
 
             case 'o':
