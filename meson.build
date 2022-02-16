@@ -15,6 +15,21 @@ add_project_arguments('-Wall', '-Werror', '-Wextra', language : 'cpp')
 flex = find_program('flex', required : true)
 bison = find_program('bison', required : true)
 
+lgen = generator(
+    flex,
+    output : ['@PLAINNAME@.yy.c', '@BASENAME@.yy.h'],
+    arguments : ['--header-file=@OUTPUT1@', '-o', '@OUTPUT0@', '@INPUT@']
+)
+
+ygen = generator(
+    bison,
+    output : ['@BASENAME@.tab.c', '@BASENAME@.tab.h'],
+    arguments : ['@INPUT@', '--defines=@OUTPUT1@', '--output=@OUTPUT0@']
+)
+
+endorse_lfiles = lgen.process('src/lib/endorse/endorse.l')
+endorse_yfiles = ygen.process('src/lib/endorse/endorse.y')
+
 src_not_main = run_command(
     'find', './src', '(', '-name', '*.c', '-or', '-name', '*.h' , ')', 
             '!', '-name', 'main.c',
@@ -58,19 +73,25 @@ vctool_exe = executable(
     'vctool',
     './src/vctool/main.c',
     src_not_main,
+    endorse_lfiles, endorse_yfiles,
     include_directories : vctool_include,
     dependencies : [threads, vcblockchain]
 )
 
 vctool_test = executable(
     'vctool-test',
-    src_not_main, test_src,
+    src_not_main,
+    endorse_lfiles, endorse_yfiles,
+    test_src,
     include_directories : vctool_include,
     dependencies : [threads, vcblockchain, vccrypt, minunit],
     link_with : [vccrypt_mock_lib]
 )
 
-vctool_lib = static_library('vctool', lib_src,
+vctool_lib = static_library(
+    'vctool',
+    lib_src,
+    endorse_lfiles, endorse_yfiles,
     include_directories : vctool_include,
     dependencies : [vcblockchain]
 )
