@@ -1,2 +1,4 @@
-[wrap-redirect]
-filename = vcblockchain/subprojects/rcpr.wrap
+[wrap-git]
+directory = rcpr
+revision = 1b29efda0dfbc528a8c64b2ec456950559275e71
+url = https://github.com/nanolith/rcpr
