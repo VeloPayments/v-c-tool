@@ -80,7 +80,7 @@ static status entity_resource_release(resource* r);
 %type <entities> entities;
 %type <entities> entities_block;
 
-//%destructor { resource_release(&$$->hdr); } <config>
+%destructor { resource_release(&$$->hdr); } <config>
 %destructor { resource_release(rbtree_resource_handle($$)); } <entities>
 
 %%
@@ -89,6 +89,8 @@ static status entity_resource_release(resource* r);
 endorse : {
             /* create a new config. */
             MAYBE_ASSIGN($$, new_endorse_config(context));
+            /* increment reference count. */
+            ++($$->reference_count);
             context->val_callback(context, $$); }
     | endorse entities {
             /* fold in entities. */
@@ -132,6 +134,7 @@ static endorse_config* new_endorse_config(endorse_config_context* context)
     memset(cfg, 0, sizeof(*cfg));
     resource_init(&cfg->hdr, &endorse_config_resource_release);
     cfg->alloc = context->alloc;
+    cfg->reference_count = 1;
 
     /* create an entities rbtree. */
     cfg->entities = new_entities(context);
@@ -162,6 +165,15 @@ static status endorse_config_resource_release(resource* r)
     status entities_release_retval = STATUS_SUCCESS;
     status reclaim_retval = STATUS_SUCCESS;
     endorse_config* cfg = (endorse_config*)r;
+
+    /* decrement reference count. */
+    --cfg->reference_count;
+
+    /* if there are still references, don't release this resource. */
+    if (cfg->reference_count > 0)
+    {
+        return STATUS_SUCCESS;
+    }
 
     rcpr_allocator* alloc = cfg->alloc;
 
