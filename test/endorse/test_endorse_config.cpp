@@ -20,6 +20,7 @@ extern "C" {
 using namespace std;
 
 RCPR_IMPORT_allocator_as(rcpr);
+RCPR_IMPORT_rbtree;
 RCPR_IMPORT_resource;
 
 /* start of the endorse_config test suite. */
@@ -139,6 +140,146 @@ TEST(empty_config)
 
     /* verify user config. */
     TEST_ASSERT(nullptr != user_context->config);
+    /* the entities tree sohuld not be NULL. */
+    TEST_ASSERT(nullptr != user_context->config->entities);
+    /* the number of entities should be zero. */
+    TEST_EXPECT(0 == rbtree_count(user_context->config->entities));
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
+
+/**
+ * Test that a bad config file raises an error.
+ */
+TEST(bad_config)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != (state = yy_scan_string("some garbage", scanner)));
+    TEST_ASSERT(0 != yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are errors. */
+    TEST_ASSERT(0U != user_context->errors->size());
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
+
+/**
+ * Test that we can parse an empty entities block.
+ */
+TEST(empty_entities_block)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != (state = yy_scan_string("entities { }", scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are no errors. */
+    TEST_ASSERT(0U == user_context->errors->size());
+
+    /* verify user config. */
+    TEST_ASSERT(nullptr != user_context->config);
+    /* the entities tree sohuld not be NULL. */
+    TEST_ASSERT(nullptr != user_context->config->entities);
+    /* the number of entities should be zero. */
+    TEST_EXPECT(0 == rbtree_count(user_context->config->entities));
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
+
+/**
+ * Test that we can parse an entities block with entries.
+ */
+TEST(entities_block)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+    resource* val;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state = yy_scan_string("entities { foo bar baz }", scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are no errors. */
+    TEST_ASSERT(0U == user_context->errors->size());
+
+    /* verify user config. */
+    TEST_ASSERT(nullptr != user_context->config);
+    /* the entities tree sohuld not be NULL. */
+    TEST_ASSERT(nullptr != user_context->config->entities);
+    /* the number of entities should be three. */
+    TEST_EXPECT(3 == rbtree_count(user_context->config->entities));
+    /* we can find foo. */
+    TEST_EXPECT(
+        STATUS_SUCCESS ==
+            rbtree_find(&val, user_context->config->entities, "foo"));
+    /* we can find bar. */
+    TEST_EXPECT(
+        STATUS_SUCCESS ==
+            rbtree_find(&val, user_context->config->entities, "bar"));
+    /* we can find baz. */
+    TEST_EXPECT(
+        STATUS_SUCCESS ==
+            rbtree_find(&val, user_context->config->entities, "baz"));
 
     /* clean up. */
     TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));

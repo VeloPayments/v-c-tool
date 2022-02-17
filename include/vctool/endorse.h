@@ -9,6 +9,7 @@
 #pragma once
 
 #include <rcpr/allocator.h>
+#include <rcpr/rbtree.h>
 #include <rcpr/resource/protected.h>
 #include <stdint.h>
 #include <vpr/uuid.h>
@@ -19,6 +20,18 @@ extern "C" {
 #endif
 
 /**
+ * \brief An endorse config entity.
+ */
+typedef struct endorse_entity endorse_entity;
+
+struct endorse_entity
+{
+    RCPR_SYM(resource) hdr;
+    RCPR_SYM(allocator)* alloc;
+    const char* id;
+};
+
+/**
  * \brief Root of the endorse configuration AST.
  */
 typedef struct endorse_config endorse_config;
@@ -27,6 +40,7 @@ struct endorse_config
 {
     RCPR_SYM(resource) hdr;
     RCPR_SYM(allocator)* alloc;
+    RCPR_SYM(rbtree)* entities;
 };
 
 /**
@@ -40,6 +54,7 @@ union endorse_config_val
     const char* string;
     vpr_uuid id;
     endorse_config* config;
+    RCPR_SYM(rbtree)* entities;
 };
 
 /**
