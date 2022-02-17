@@ -49,7 +49,7 @@ static rcpr_comparison_result endorse_entities_compare(
 static const void* endorse_entities_key(
     void*, const resource* r);
 static rbtree* new_entities(endorse_config_context*);
-static rbtree* add_entity(endorse_config_context*, rbtree*, const char*);
+static rbtree* add_entity(endorse_config_context*, rbtree*, const char*, bool);
 static status entity_resource_release(resource* r);
 %}
 
@@ -109,7 +109,7 @@ entities_block
         MAYBE_ASSIGN($$, new_entities(context)); }
     | entities_block IDENTIFIER {
         /* add an entity to the entities tree. */
-        MAYBE_ASSIGN($$, add_entity(context, $1, $2)); }
+        MAYBE_ASSIGN($$, add_entity(context, $1, $2, true)); }
     ;
 %%
 
@@ -296,7 +296,8 @@ static rbtree* new_entities(endorse_config_context* context)
  * \brief Add an entity to the entities tree.
  */
 static rbtree* add_entity(
-    endorse_config_context* context, rbtree* entities, const char* id)
+    endorse_config_context* context, rbtree* entities, const char* id,
+    bool is_decl)
 {
     status retval;
     endorse_entity* entity;
@@ -316,6 +317,7 @@ static rbtree* add_entity(
     entity->alloc = context->alloc;
     entity->id = strdup(id);
     entity->reference_count = 1;
+    entity->id_declared = is_decl;
 
     /* insert this entity into the rbtree. */
     retval = rbtree_insert(entities, &entity->hdr);
