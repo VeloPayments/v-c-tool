@@ -28,7 +28,9 @@ struct endorse_entity
 {
     RCPR_SYM(resource) hdr;
     RCPR_SYM(allocator)* alloc;
+    int reference_count;
     const char* id;
+    bool id_declared;
 };
 
 /**

@@ -315,6 +315,7 @@ static rbtree* add_entity(
     resource_init(&entity->hdr, &entity_resource_release);
     entity->alloc = context->alloc;
     entity->id = strdup(id);
+    entity->reference_count = 1;
 
     /* insert this entity into the rbtree. */
     retval = rbtree_insert(entities, &entity->hdr);
@@ -333,6 +334,15 @@ static rbtree* add_entity(
 static status entity_resource_release(resource* r)
 {
     endorse_entity* entity = (endorse_entity*)r;
+
+    /* decrement reference count. */
+    --entity->reference_count;
+
+    /* if there are still references, don't release this resource. */
+    if (entity->reference_count > 0)
+    {
+        return STATUS_SUCCESS;
+    }
 
     /* cache allocator. */
     rcpr_allocator* alloc = entity->alloc;
