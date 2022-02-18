@@ -31,6 +31,21 @@ struct endorse_entity
     int reference_count;
     const char* id;
     bool id_declared;
+    RCPR_SYM(rbtree)* verbs;
+};
+
+/**
+ * \brief An endorse config verb.
+ */
+typedef struct endorse_verb endorse_verb;
+
+struct endorse_verb
+{
+    RCPR_SYM(resource) hdr;
+    RCPR_SYM(allocator)* alloc;
+    int reference_count;
+    const char* verb;
+    vpr_uuid verb_id;
 };
 
 /**

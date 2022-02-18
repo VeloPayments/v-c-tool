@@ -48,6 +48,10 @@ static rcpr_comparison_result endorse_entities_compare(
     void*, const void* lhs, const void* rhs);
 static const void* endorse_entities_key(
     void*, const resource* r);
+static rcpr_comparison_result endorse_verbs_compare(
+    void*, const void* lhs, const void* rhs);
+static const void* endorse_verbs_key(
+    void*, const resource* r);
 static rbtree* new_entities(endorse_config_context*);
 static rbtree* add_entity(endorse_config_context*, rbtree*, const char*, bool);
 static status entity_resource_release(resource* r);
@@ -237,6 +241,41 @@ static const void* endorse_entities_key(
 }
 
 /**
+ * \brief Compare two verbs by key.
+ */
+static rcpr_comparison_result endorse_verbs_compare(
+    void*, const void* lhs, const void* rhs)
+{
+    const char* l = (const char*)lhs;
+    const char* r = (const char*)rhs;
+
+    int result = strcmp(l, r);
+    if (result < 0)
+    {
+        return RCPR_COMPARE_LT;
+    }
+    else if (result > 0)
+    {
+        return RCPR_COMPARE_GT;
+    }
+    else
+    {
+        return RCPR_COMPARE_EQ;
+    }
+}
+
+/**
+ * \brief Get the key for an endorse config verb.
+ */
+static const void* endorse_verbs_key(
+    void*, const resource* r)
+{
+    const endorse_verb* verb = (const endorse_verb*)r;
+
+    return (const void*)verb->verb;
+}
+
+/**
  * \brief Merge an entities tree into the config.
  */
 static endorse_config* merge_entities(
@@ -301,6 +340,7 @@ static rbtree* add_entity(
 {
     status retval;
     endorse_entity* entity;
+    const char* error_message;
 
     /* allocate an endorse_entity instance. */
     retval =
@@ -308,7 +348,8 @@ static rbtree* add_entity(
             context->alloc, (void**)&entity, sizeof(*entity));
     if (STATUS_SUCCESS != retval)
     {
-        CONFIG_ERROR("Out of memory creating entity in add_entity.");
+        error_message = "Out of memory creating entity in add_entity.";
+        goto error_exit;
     }
 
     /* set up entity. */
@@ -319,15 +360,37 @@ static rbtree* add_entity(
     entity->reference_count = 1;
     entity->id_declared = is_decl;
 
+    /* create the verbs tree for this entity. */
+    retval =
+        rbtree_create(
+            &entity->verbs, context->alloc, &endorse_verbs_compare,
+            &endorse_verbs_key, NULL);
+    if (STATUS_SUCCESS != retval)
+    {
+        error_message = "Out of memory creating entity verb tree in add_entity";
+        goto cleanup_entity;
+    }
+
     /* insert this entity into the rbtree. */
     retval = rbtree_insert(entities, &entity->hdr);
     if (STATUS_SUCCESS != retval)
     {
-        CONFIG_ERROR("Out of memory inserting entity in add_entity.");
+        error_message = "Out of memory inserting entity in add_entity.";
+        goto cleanup_entity;
     }
 
     /* success. */
     return entities;
+
+cleanup_entity:
+    retval = resource_release(&entity->hdr);
+    if (STATUS_SUCCESS != retval)
+    {
+        error_message = "Error releasing entity resource.";
+    }
+
+error_exit:
+    CONFIG_ERROR(error_message);
 }
 
 /**
@@ -335,6 +398,8 @@ static rbtree* add_entity(
  */
 static status entity_resource_release(resource* r)
 {
+    status reclaim_retval = STATUS_SUCCESS;
+    status verbs_release_retval = STATUS_SUCCESS;
     endorse_entity* entity = (endorse_entity*)r;
 
     /* decrement reference count. */
@@ -352,11 +417,25 @@ static status entity_resource_release(resource* r)
     /* free the id string. */
     free((void*)entity->id);
 
+    /* release the verbs rbtree if set. */
+    verbs_release_retval =
+        resource_release(rbtree_resource_handle(entity->verbs));
+
     /* clear memory. */
     memset(entity, 0, sizeof(*entity));
 
     /* reclaim entity. */
-    return rcpr_allocator_reclaim(alloc, entity);
+    reclaim_retval = rcpr_allocator_reclaim(alloc, entity);
+
+    /* decode return status. */
+    if (STATUS_SUCCESS != verbs_release_retval)
+    {
+        return verbs_release_retval;
+    }
+    else
+    {
+        return reclaim_retval;
+    }
 }
 
 /**
