@@ -140,6 +140,8 @@ TEST(empty_config)
 
     /* verify user config. */
     TEST_ASSERT(nullptr != user_context->config);
+    /* There should only be one reference to this config. */
+    TEST_EXPECT(1 == user_context->config->reference_count);
     /* the entities tree sohuld not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be zero. */
@@ -219,6 +221,8 @@ TEST(empty_entities_block)
 
     /* verify user config. */
     TEST_ASSERT(nullptr != user_context->config);
+    /* There should only be one reference to this config. */
+    TEST_EXPECT(1 == user_context->config->reference_count);
     /* the entities tree sohuld not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be zero. */
@@ -264,6 +268,8 @@ TEST(entities_block)
 
     /* verify user config. */
     TEST_ASSERT(nullptr != user_context->config);
+    /* There should only be one reference to this config. */
+    TEST_EXPECT(1 == user_context->config->reference_count);
     /* the entities tree sohuld not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be three. */

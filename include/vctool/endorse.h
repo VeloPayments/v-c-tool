@@ -40,6 +40,7 @@ struct endorse_config
 {
     RCPR_SYM(resource) hdr;
     RCPR_SYM(allocator)* alloc;
+    int reference_count;
     RCPR_SYM(rbtree)* entities;
 };
 
