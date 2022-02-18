@@ -75,8 +75,9 @@ verbs {
 }
 
 ([0-9a-fA-F]){8}[-]([0-9a-fA-F]){4}[-]([0-9a-fA-F]){4}[-]([0-9a-fA-F]){4}[-]([0-9a-fA-F]){12} {
-    memset(&yylval->id, 0, sizeof(yylval->id));
-    if (STATUS_SUCCESS != vpr_uuid_from_string(&yylval->id, yytext))
+    yylval->id = malloc(sizeof(*yylval->id));
+    memset(yylval->id, 0, sizeof(*yylval->id));
+    if (STATUS_SUCCESS != vpr_uuid_from_string(yylval->id, yytext))
     {
         return UUID_INVALID;
     }
