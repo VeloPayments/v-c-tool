@@ -70,9 +70,12 @@ union endorse_config_val
 {
     int64_t number;
     const char* string;
-    vpr_uuid id;
+    vpr_uuid* id;
     endorse_config* config;
     RCPR_SYM(rbtree)* entities;
+    endorse_entity* entity;
+    endorse_verb* verb;
+    RCPR_SYM(rbtree)* verbs;
 };
 
 /**
