@@ -69,7 +69,7 @@ typedef union endorse_config_val endorse_config_val;
 union endorse_config_val
 {
     int64_t number;
-    const char* string;
+    char* string;
     vpr_uuid* id;
     endorse_config* config;
     RCPR_SYM(rbtree)* entities;

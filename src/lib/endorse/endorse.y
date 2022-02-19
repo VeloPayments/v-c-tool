@@ -78,18 +78,18 @@ static status merge_verbs(endorse_entity*, endorse_entity*);
 %parse-param {endorse_config_context* context}
 
 /* Tokens. */
-%token <string> COMMA
-%token <string> LBRACE
-%token <string> ENTITIES
-%token <string> EXTENDS
-%token <string> FOR
+%token COMMA
+%token LBRACE
+%token ENTITIES
+%token EXTENDS
+%token FOR
 %token <string> IDENTIFIER
 %token <string> INVALID
-%token <string> RBRACE
-%token <string> ROLES
+%token RBRACE
+%token ROLES
 %token <id> UUID
 %token <id> UUID_INVALID
-%token <string> VERBS
+%token VERBS
 
 %type <config> endorse
 %type <entities> entities;
@@ -100,8 +100,9 @@ static status merge_verbs(endorse_entity*, endorse_entity*);
 %destructor { resource_release(&$$->hdr); } <config>
 %destructor { resource_release(rbtree_resource_handle($$)); } <entities>
 %destructor { resource_release(&$$->hdr); } <entity>
-%destructor { resource_release(rbtree_resource_handle($$)); } <verbs>
 %destructor { memset($$, 0, sizeof(*$$)); free($$); } <id>
+%destructor { free($$); } <string>
+%destructor { resource_release(rbtree_resource_handle($$)); } <verbs>
 
 %%
 

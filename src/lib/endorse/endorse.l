@@ -22,49 +22,41 @@ FILE* vctool_endorse_set_input_filedescriptor(
 
 [{] {
     /* lbrace token */
-    yylval->string = "{";
     return LBRACE;
 }
 
 [}] {
     /* rbrace token */
-    yylval->string = "}";
     return RBRACE;
 }
 
 [,] {
     /* comma token */
-    yylval->string = ",";
     return COMMA;
 }
 
 entities {
     /* entities keyword */
-    yylval->string = "entities";
     return ENTITIES;
 }
 
 extends {
     /* extends keyword */
-    yylval->string = "extends";
     return EXTENDS;
 }
 
 for {
     /* for keyword */
-    yylval->string = "for";
     return FOR;
 }
 
 roles {
     /* roles keyword */
-    yylval->string = "roles";
     return ROLES;
 }
 
 verbs {
     /* verbs keyword */
-    yylval->string = "verbs";
     return VERBS;
 }
 
