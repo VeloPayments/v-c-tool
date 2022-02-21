@@ -66,7 +66,9 @@ static endorse_verb* new_verb(
 static status verb_resource_release(resource* r);
 static endorse_config* merge_verb_entity(
     endorse_config_context*, endorse_config*, endorse_entity*);
-static status merge_verbs(endorse_entity*, endorse_entity*);
+static status merge_verbs(
+    endorse_config_context* context, endorse_entity* canonical_entity,
+    endorse_entity* entity);
 %}
 
 /* use the full pure API for Bison. */
@@ -332,7 +334,7 @@ static endorse_config* merge_entities(
         retval = rbtree_find(&dup, cfg->entities, value->id);
         if (STATUS_SUCCESS == retval)
         {
-            char buffer[100];
+            char buffer[1024];
             snprintf(
                 buffer, sizeof(buffer), "Duplicate entity `%s'.", value->id);
             CONFIG_ERROR(buffer);
@@ -556,6 +558,17 @@ static rbtree* add_verb(
     status retval;
     endorse_verb* verb = NULL;
     const char* error_message;
+    resource* dup;
+    char buffer[1024];
+
+    /* check to see if the verb already exists. */
+    retval = rbtree_find(&dup, verbs, verb_name);
+    if (STATUS_SUCCESS == retval)
+    {
+        snprintf(buffer, sizeof(buffer), "Duplicate verb `%s'.", verb_name);
+        error_message = buffer;
+        goto error_exit;
+    }
 
     /* create a verb. */
     verb = new_verb(context, verb_name, verb_id);
@@ -565,7 +578,7 @@ static rbtree* add_verb(
         goto error_exit;
     }
 
-    /* insert this verby into the rbtree. */
+    /* insert this verb into the rbtree. */
     retval = rbtree_insert(verbs, &verb->hdr);
     if (STATUS_SUCCESS != retval)
     {
@@ -663,7 +676,7 @@ static endorse_config* merge_verb_entity(
     if (STATUS_SUCCESS == retval)
     {
         /* entity found; merge verbs. */
-        retval = merge_verbs((endorse_entity*)entity_resource, entity);
+        retval = merge_verbs(context, (endorse_entity*)entity_resource, entity);
         if (STATUS_SUCCESS != retval)
         {
             CONFIG_ERROR("Error merging verbs into the canonical entity.");
@@ -690,17 +703,31 @@ static endorse_config* merge_verb_entity(
  * \brief Merge verbs into the canonical entity.
  */
 static status merge_verbs(
-    endorse_entity* canonical_entity, endorse_entity* entity)
+    endorse_config_context* context, endorse_entity* canonical_entity,
+    endorse_entity* entity)
 {
     status retval;
     rbtree_node* node;
     endorse_verb* verb;
     resource* verb_resource;
+    resource* dup;
 
     while (rbtree_count(entity->verbs) > 0)
     {
         node = rbtree_root_node(entity->verbs);
         verb = (endorse_verb*)rbtree_node_value(entity->verbs, node);
+
+        /* see if this verb already exists in the verbs tree. */
+        retval = rbtree_find(&dup, canonical_entity->verbs, verb->verb);
+        if (STATUS_SUCCESS == retval)
+        {
+            char buffer[1024];
+            snprintf(
+                buffer, sizeof(buffer), "Duplicate verb `%s' for entity `%s'.",
+                verb->verb, canonical_entity->id);
+            context->set_error(context, buffer);
+            return -1;
+        }
 
         /* delete this node from the entity node tree. */
         retval = rbtree_delete(&verb_resource, entity->verbs, verb->verb);
