@@ -7,6 +7,7 @@
  */
 
 %{
+#include <stdio.h>
 #include <string.h>
 #include <rcpr/compare.h>
 #include <vctool/endorse.h>
@@ -320,11 +321,22 @@ static endorse_config* merge_entities(
     rbtree_node* node;
     endorse_entity* value;
     resource* value_resource;
+    resource* dup;
 
     while (rbtree_count(entities) > 0)
     {
         node = rbtree_root_node(entities);
         value = (endorse_entity*)rbtree_node_value(entities, node);
+
+        /* see if this entity already exists in the entities tree. */
+        retval = rbtree_find(&dup, cfg->entities, value->id);
+        if (STATUS_SUCCESS == retval)
+        {
+            char buffer[100];
+            snprintf(
+                buffer, sizeof(buffer), "Duplicate entity `%s'.", value->id);
+            CONFIG_ERROR(buffer);
+        }
 
         /* delete this node from the entities tree. */
         retval = rbtree_delete(&value_resource, entities, value->id);
