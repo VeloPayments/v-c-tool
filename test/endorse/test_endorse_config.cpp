@@ -580,3 +580,96 @@ TEST(verb_block_with_verbs)
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
 }
+
+/**
+ * Test that duplicate verbs cause an error.
+ */
+TEST(duplicate_verbs_for_entity)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(
+                verbs for agentd {
+                    block_get           f382e365-1224-43b4-924a-1de4d9f4cf25
+                    transaction_get     7df210d6-f00b-47c4-a608-6f3f1df7511a
+                    artifact_get        fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+                    block_get           64f349a9-e065-426c-b72d-276e6bf016ca
+                })MULTI", scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are errors. */
+    TEST_ASSERT(0U != user_context->errors->size());
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
+
+/**
+ * Test that duplicate verbs cause an error.
+ */
+TEST(duplicate_verbs_for_entity2)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(
+                verbs for agentd {
+                    block_get           f382e365-1224-43b4-924a-1de4d9f4cf25
+                    transaction_get     7df210d6-f00b-47c4-a608-6f3f1df7511a
+                    artifact_get        fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+                }
+
+                verbs for agentd {
+                    block_get           64f349a9-e065-426c-b72d-276e6bf016ca
+                })MULTI", scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are errors. */
+    TEST_ASSERT(0U != user_context->errors->size());
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
