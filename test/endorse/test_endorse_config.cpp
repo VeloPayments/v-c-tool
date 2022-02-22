@@ -295,6 +295,47 @@ TEST(entities_block)
 }
 
 /**
+ * Test that duplicate entity decls cause an error.
+ */
+TEST(duplicate_entity_decls)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(
+                    entities { foo bar foo }
+                )MULTI", scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are errors. */
+    TEST_ASSERT(0U != user_context->errors->size());
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
+
+/**
  * Test that we can parse an empty verb block.
  */
 TEST(empty_verb_block)
@@ -539,4 +580,3 @@ TEST(verb_block_with_verbs)
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
 }
-
