@@ -53,14 +53,19 @@ static rcpr_comparison_result endorse_verbs_compare(
     void*, const void* lhs, const void* rhs);
 static const void* endorse_verbs_key(
     void*, const resource* r);
+static rcpr_comparison_result endorse_roles_compare(
+    void*, const void* lhs, const void* rhs);
+static const void* endorse_roles_key(
+    void*, const resource* r);
 static rbtree* new_entities(endorse_config_context*);
 static rbtree* add_entity(endorse_config_context*, rbtree*, const char*, bool);
 static endorse_entity* new_entity(
-    endorse_config_context*, const char*, rbtree*, bool);
+    endorse_config_context*, const char*, rbtree*, rbtree*, bool);
 static status entity_resource_release(resource* r);
 static rbtree* add_verb(
     endorse_config_context*, rbtree*, const char*, const vpr_uuid*);
 static rbtree* new_verbs(endorse_config_context*);
+static rbtree* new_roles(endorse_config_context*);
 static endorse_verb* new_verb(
     endorse_config_context*, const char*, const vpr_uuid*);
 static status verb_resource_release(resource* r);
@@ -142,7 +147,7 @@ entities_block
 verb_entity
     : VERBS FOR IDENTIFIER LBRACE verbs_block RBRACE {
         /* create an entity reference. */
-        MAYBE_ASSIGN($$, new_entity(context, $3, $5, false)); }
+        MAYBE_ASSIGN($$, new_entity(context, $3, $5, NULL, false)); }
     ;
 
 verbs_block
@@ -381,6 +386,62 @@ static rbtree* new_entities(endorse_config_context* context)
 }
 
 /**
+ * \brief Create a new roles tree.
+ */
+static rbtree* new_roles(endorse_config_context* context)
+{
+    status retval;
+    rbtree* roles;
+
+    /* create a verbs rbtree. */
+    retval =
+        rbtree_create(
+            &roles, context->alloc, &endorse_roles_compare,
+            &endorse_roles_key, NULL);
+    if (STATUS_SUCCESS != retval)
+    {
+        CONFIG_ERROR("Out of memory creating roles tree.");
+    }
+
+    return roles;
+}
+
+/**
+ * \brief Compare two roles by key.
+ */
+static rcpr_comparison_result endorse_roles_compare(
+    void*, const void* lhs, const void* rhs)
+{
+    const char* l = (const char*)lhs;
+    const char* r = (const char*)rhs;
+
+    int result = strcmp(l, r);
+    if (result < 0)
+    {
+        return RCPR_COMPARE_LT;
+    }
+    else if (result > 0)
+    {
+        return RCPR_COMPARE_GT;
+    }
+    else
+    {
+        return RCPR_COMPARE_EQ;
+    }
+}
+
+/**
+ * \brief Get the key for an endorse config role.
+ */
+static const void* endorse_roles_key(
+    void*, const resource* r)
+{
+    const endorse_role* role = (const endorse_role*)r;
+
+    return (const void*)role->name;
+}
+
+/**
  * \brief Create a new verbs tree.
  */
 static rbtree* new_verbs(endorse_config_context* context)
@@ -411,6 +472,7 @@ static rbtree* add_entity(
     status retval;
     endorse_entity* entity = NULL;
     rbtree* verbs = NULL;
+    rbtree* roles = NULL;
     const char* error_message;
 
     /* create the verbs tree for this entity. */
@@ -421,16 +483,27 @@ static rbtree* add_entity(
         goto error_exit;
     }
 
+    /* create the roles tree for this entity. */
+    roles = new_roles(context);
+    if (NULL == roles)
+    {
+        error_message = "Out of memory creating roles tree in add_entity";
+        goto cleanup_verbs;
+    }
+
     /* create an entity. */
-    entity = new_entity(context, id, verbs, is_decl);
+    entity = new_entity(context, id, verbs, roles, is_decl);
     if (NULL == entity)
     {
         error_message = "Out of memory creating entity in add_entity.";
-        goto cleanup_verbs;
+        goto cleanup_roles;
     }
 
     /* verbs is now owned by entity. */
     verbs = NULL;
+
+    /* roles is now owned by entity. */
+    roles = NULL;
 
     /* insert this entity into the rbtree. */
     retval = rbtree_insert(entities, &entity->hdr);
@@ -448,6 +521,17 @@ cleanup_entity:
     if (STATUS_SUCCESS != retval)
     {
         error_message = "Error releasing entity resource.";
+    }
+
+cleanup_roles:
+    if (NULL != roles)
+    {
+        retval = resource_release(rbtree_resource_handle(roles));
+        if (STATUS_SUCCESS != retval)
+        {
+            error_message = "Error releasing roles resource.";
+        }
+        roles = NULL;
     }
 
 cleanup_verbs:
@@ -471,7 +555,7 @@ error_exit:
  */
 static endorse_entity* new_entity(
     endorse_config_context* context, const char* id, rbtree* verbs,
-    bool is_decl)
+    rbtree* roles, bool is_decl)
 {
     status retval;
     endorse_entity* entity;
@@ -495,6 +579,7 @@ static endorse_entity* new_entity(
     entity->reference_count = 1;
     entity->id_declared = is_decl;
     entity->verbs = verbs;
+    entity->roles = roles;
 
     /* success. */
     return entity;
@@ -510,6 +595,7 @@ static status entity_resource_release(resource* r)
 {
     status reclaim_retval = STATUS_SUCCESS;
     status verbs_release_retval = STATUS_SUCCESS;
+    status roles_release_retval = STATUS_SUCCESS;
     endorse_entity* entity = (endorse_entity*)r;
 
     /* decrement reference count. */
@@ -528,8 +614,18 @@ static status entity_resource_release(resource* r)
     free((void*)entity->id);
 
     /* release the verbs rbtree if set. */
-    verbs_release_retval =
-        resource_release(rbtree_resource_handle(entity->verbs));
+    if (NULL != entity->verbs)
+    {
+        verbs_release_retval =
+            resource_release(rbtree_resource_handle(entity->verbs));
+    }
+
+    /* release the roles rbtree if set. */
+    if (NULL != entity->roles)
+    {
+        roles_release_retval =
+            resource_release(rbtree_resource_handle(entity->roles));
+    }
 
     /* clear memory. */
     memset(entity, 0, sizeof(*entity));
@@ -541,6 +637,10 @@ static status entity_resource_release(resource* r)
     if (STATUS_SUCCESS != verbs_release_retval)
     {
         return verbs_release_retval;
+    }
+    else if (STATUS_SUCCESS != roles_release_retval)
+    {
+        return roles_release_retval;
     }
     else
     {
