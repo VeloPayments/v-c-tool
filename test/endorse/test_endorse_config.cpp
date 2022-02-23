@@ -673,3 +673,67 @@ TEST(duplicate_verbs_for_entity2)
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
 }
+
+/**
+ * Test that we can parse an empty roles block.
+ */
+TEST(empty_roles_block)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+    resource* val;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(roles for agentd { })MULTI",
+                scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are no errors. */
+    TEST_ASSERT(0U == user_context->errors->size());
+
+    /* verify user config. */
+    TEST_ASSERT(nullptr != user_context->config);
+    /* There should only be one reference to this config. */
+    TEST_EXPECT(1 == user_context->config->reference_count);
+    /* the entities tree sohuld not be NULL. */
+    TEST_ASSERT(nullptr != user_context->config->entities);
+    /* the number of entities should be three. */
+    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+
+    /* we can find agentd. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            rbtree_find(&val, user_context->config->entities, "agentd"));
+
+    /* examine properties of agentd. */
+    endorse_entity* agentd = (endorse_entity*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(1 == agentd->reference_count);
+    /* the id was NOT declared. */
+    TEST_EXPECT(!agentd->id_declared);
+    /* there are no roles defined. */
+    TEST_EXPECT(0 == rbtree_count(agentd->roles));
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}

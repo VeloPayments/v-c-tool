@@ -74,6 +74,11 @@ static endorse_config* merge_verb_entity(
 static status merge_verbs(
     endorse_config_context* context, endorse_entity* canonical_entity,
     endorse_entity* entity);
+static endorse_config* merge_role_entity(
+    endorse_config_context*, endorse_config*, endorse_entity*);
+static status merge_roles(
+    endorse_config_context* context, endorse_entity* canonical_entity,
+    endorse_entity* entity);
 %}
 
 /* use the full pure API for Bison. */
@@ -103,7 +108,9 @@ static status merge_verbs(
 %type <entities> entities;
 %type <entities> entities_block;
 %type <entity> verb_entity;
+%type <entity> role_entity;
 %type <verbs> verbs_block;
+%type <roles> roles_block;
 
 %destructor { resource_release(&$$->hdr); } <config>
 %destructor { resource_release(rbtree_resource_handle($$)); } <entities>
@@ -111,6 +118,7 @@ static status merge_verbs(
 %destructor { memset($$, 0, sizeof(*$$)); free($$); } <id>
 %destructor { free($$); } <string>
 %destructor { resource_release(rbtree_resource_handle($$)); } <verbs>
+%destructor { resource_release(rbtree_resource_handle($$)); } <roles>
 
 %%
 
@@ -127,6 +135,9 @@ endorse : {
     | endorse verb_entity {
             /* fold in verbs. */
             MAYBE_ASSIGN($$, merge_verb_entity(context, $1, $2)); }
+    | endorse role_entity {
+            /* fold in roles. */
+            MAYBE_ASSIGN($$, merge_role_entity(context, $1, $2)); }
     ;
 
 entities
@@ -158,6 +169,17 @@ verbs_block
         MAYBE_ASSIGN($$, add_verb(context, $1, $2, $3)); }
     ;
 
+role_entity
+    : ROLES FOR IDENTIFIER LBRACE roles_block RBRACE {
+        /* create an entity reference. */
+        MAYBE_ASSIGN($$, new_entity(context, $3, NULL, $5, false)); }
+    ;
+
+roles_block
+    : {
+        /* create a new roles block. */
+        MAYBE_ASSIGN($$, new_roles(context)); }
+    ;
 %%
 
 /**
@@ -838,6 +860,102 @@ static status merge_verbs(
 
         /* insert this verb into the canonical entity's verb tree. */
         retval = rbtree_insert(canonical_entity->verbs, verb_resource);
+        if (STATUS_SUCCESS != retval)
+        {
+            return retval;
+        }
+    }
+
+    /* success. */
+    return STATUS_SUCCESS;
+}
+
+/**
+ * \brief Merge an entity with roles with the canonical entity.
+ */
+static endorse_config* merge_role_entity(
+    endorse_config_context* context, endorse_config* cfg,
+    endorse_entity* entity)
+{
+    status retval;
+    resource* entity_resource;
+
+    /* attempt to look up the canonical entity by name. */
+    retval = rbtree_find(&entity_resource, cfg->entities, entity->id);
+    if (STATUS_SUCCESS == retval)
+    {
+        /* entity found; merge roles. */
+        retval = merge_roles(context, (endorse_entity*)entity_resource, entity);
+        if (STATUS_SUCCESS != retval)
+        {
+            CONFIG_ERROR("Error merging roles into the canonical entity.");
+        }
+    }
+    else
+    {
+        /* this is an error case, but we will pick it up in semantic analysis.*/
+        /* for now, move the entity into the canonical entity tree. */
+
+        /* insert the entity into the entities tree. */
+        retval = rbtree_insert(cfg->entities, &entity->hdr);
+        if (STATUS_SUCCESS != retval)
+        {
+            CONFIG_ERROR("Could not merge non-canonical entity.");
+        }
+    }
+
+    /* success. */
+    return cfg;
+}
+
+/**
+ * \brief Merge roles into the canonical entity.
+ */
+static status merge_roles(
+    endorse_config_context* context, endorse_entity* canonical_entity,
+    endorse_entity* entity)
+{
+    status retval;
+    rbtree_node* node;
+    endorse_role* role;
+    resource* role_resource;
+    resource* dup;
+
+    /* simple case: the canonical entity has no roles. */
+    if (NULL == canonical_entity->roles)
+    {
+        canonical_entity->roles = entity->roles;
+        entity->roles = NULL;
+        return STATUS_SUCCESS;
+    }
+
+    /* less simple case: we need to merge the roles. */
+    while (rbtree_count(entity->roles) > 0)
+    {
+        node = rbtree_root_node(entity->roles);
+        role = (endorse_role*)rbtree_node_value(entity->roles, node);
+
+        /* see if this role already exists in the verbs tree. */
+        retval = rbtree_find(&dup, canonical_entity->roles, role->name);
+        if (STATUS_SUCCESS == retval)
+        {
+            char buffer[1024];
+            snprintf(
+                buffer, sizeof(buffer), "Duplicate role `%s' for entity `%s'.",
+                role->name, canonical_entity->id);
+            context->set_error(context, buffer);
+            return -1;
+        }
+
+        /* delete this node from the entity node tree. */
+        retval = rbtree_delete(&role_resource, entity->roles, role->name);
+        if (STATUS_SUCCESS != retval)
+        {
+            return retval;
+        }
+
+        /* insert this role into the canonical entity's role tree. */
+        retval = rbtree_insert(canonical_entity->roles, role_resource);
         if (STATUS_SUCCESS != retval)
         {
             return retval;

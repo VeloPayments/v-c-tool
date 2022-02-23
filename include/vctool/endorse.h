@@ -102,6 +102,7 @@ union endorse_config_val
     vpr_uuid* id;
     endorse_config* config;
     RCPR_SYM(rbtree)* entities;
+    RCPR_SYM(rbtree)* roles;
     endorse_entity* entity;
     endorse_verb* verb;
     RCPR_SYM(rbtree)* verbs;
