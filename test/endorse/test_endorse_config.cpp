@@ -739,7 +739,7 @@ TEST(empty_roles_block)
 }
 
 /**
- * If we parse a roles block for a declared intity, the id_declared flag is
+ * If we parse a roles block for a declared entity, the id_declared flag is
  * true.
  */
 TEST(empty_roles_block_declared_entity)
@@ -912,6 +912,56 @@ TEST(empty_roles)
     TEST_EXPECT(!strcmp(extended_sentinel->name, "extended_sentinel"));
     /* no verbs are defined for extended_sentinel. */
     TEST_EXPECT(0 == rbtree_count(extended_sentinel->verbs));
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
+
+/**
+ * Verify that duplicate roles cause an error.
+ */
+TEST(duplicate_roles)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(
+                    entities {
+                        agentd
+                    }
+                    roles for agentd {
+                        reader { }
+                        submitter { }
+                        extended_sentinel { }
+                        reader { }
+                    }
+                )MULTI",
+                scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are errors. */
+    TEST_ASSERT(0U != user_context->errors->size());
 
     /* clean up. */
     TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
