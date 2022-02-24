@@ -32,6 +32,7 @@ struct endorse_entity
     const char* id;
     bool id_declared;
     RCPR_SYM(rbtree)* verbs;
+    RCPR_SYM(rbtree)* roles;
 };
 
 /**
@@ -46,6 +47,34 @@ struct endorse_verb
     int reference_count;
     const char* verb;
     vpr_uuid verb_id;
+};
+
+/**
+ * \brief An endorse role verb.
+ */
+typedef struct endorse_role_verb endorse_role_verb;
+
+struct endorse_role_verb
+{
+    RCPR_SYM(resource) hdr;
+    RCPR_SYM(allocator)* alloc;
+    int reference_count;
+    const char* verb_name;
+    endorse_verb* verb;
+};
+
+/**
+ * \brief An endorse role.
+ */
+typedef struct endorse_role endorse_role;
+
+struct endorse_role
+{
+    RCPR_SYM(resource) hdr;
+    RCPR_SYM(allocator)* alloc;
+    int reference_count;
+    const char* name;
+    RCPR_SYM(rbtree)* verbs;
 };
 
 /**
