@@ -79,6 +79,15 @@ static endorse_config* merge_role_entity(
 static status merge_roles(
     endorse_config_context* context, endorse_entity* canonical_entity,
     endorse_entity* entity);
+static rbtree* new_role_verbs(endorse_config_context*);
+static rcpr_comparison_result endorse_role_verbs_compare(
+    void*, const void*, const void*);
+static const void* endorse_role_verbs_key(void*, const resource*);
+static rbtree* add_role(
+    endorse_config_context*, rbtree*, const char*, rbtree*);
+static endorse_role* new_role(
+    endorse_config_context*, const char*, rbtree*);
+static status role_resource_release(resource* r);
 %}
 
 /* use the full pure API for Bison. */
@@ -111,6 +120,7 @@ static status merge_roles(
 %type <entity> role_entity;
 %type <verbs> verbs_block;
 %type <roles> roles_block;
+%type <role_verbs> role_verbs;
 
 %destructor { resource_release(&$$->hdr); } <config>
 %destructor { resource_release(rbtree_resource_handle($$)); } <entities>
@@ -119,6 +129,7 @@ static status merge_roles(
 %destructor { free($$); } <string>
 %destructor { resource_release(rbtree_resource_handle($$)); } <verbs>
 %destructor { resource_release(rbtree_resource_handle($$)); } <roles>
+%destructor { resource_release(rbtree_resource_handle($$)); } <role_verbs>
 
 %%
 
@@ -179,6 +190,14 @@ roles_block
     : {
         /* create a new roles block. */
         MAYBE_ASSIGN($$, new_roles(context)); }
+    | roles_block IDENTIFIER LBRACE role_verbs RBRACE {
+        MAYBE_ASSIGN($$, add_role(context, $1, $2, $4)); }
+    ;
+
+role_verbs
+    : {
+        /* create a new role_verbs block. */
+        MAYBE_ASSIGN($$, new_role_verbs(context)); }
     ;
 %%
 
@@ -405,6 +424,62 @@ static rbtree* new_entities(endorse_config_context* context)
     }
 
     return entities;
+}
+
+/**
+ * \brief Create a new role_verbs tree.
+ */
+static rbtree* new_role_verbs(endorse_config_context* context)
+{
+    status retval;
+    rbtree* role_verbs;
+
+    /* create a role_verbs rbtree. */
+    retval =
+        rbtree_create(
+            &role_verbs, context->alloc, &endorse_role_verbs_compare,
+            &endorse_role_verbs_key, NULL);
+    if (STATUS_SUCCESS != retval)
+    {
+        CONFIG_ERROR("Out of memory creating role_verbs tree.");
+    }
+
+    return role_verbs;
+}
+
+/**
+ * \brief Compare two role_verbs by key.
+ */
+static rcpr_comparison_result endorse_role_verbs_compare(
+    void*, const void* lhs, const void* rhs)
+{
+    const char* l = (const char*)lhs;
+    const char* r = (const char*)rhs;
+
+    int result = strcmp(l, r);
+    if (result < 0)
+    {
+        return RCPR_COMPARE_LT;
+    }
+    else if (result > 0)
+    {
+        return RCPR_COMPARE_GT;
+    }
+    else
+    {
+        return RCPR_COMPARE_EQ;
+    }
+}
+
+/**
+ * \brief Get the key for an endorse config role verb.
+ */
+static const void* endorse_role_verbs_key(
+    void*, const resource* r)
+{
+    const endorse_role_verb* role = (const endorse_role_verb*)r;
+
+    return (const void*)role->verb_name;
 }
 
 /**
@@ -964,6 +1039,197 @@ static status merge_roles(
 
     /* success. */
     return STATUS_SUCCESS;
+}
+
+/**
+ * \brief Add a role to the roles tree.
+ */
+static rbtree* add_role(
+    endorse_config_context* context, rbtree* roles, const char* role_name,
+    rbtree* role_verbs)
+{
+    status retval;
+    endorse_role* role = NULL;
+    const char* error_message;
+    resource* dup;
+    char buffer[1024];
+
+    /* check to see if the role already exists. */
+    retval = rbtree_find(&dup, roles, role_name);
+    if (STATUS_SUCCESS == retval)
+    {
+        snprintf(buffer, sizeof(buffer), "Duplicate role `%s'.", role_name);
+        error_message = buffer;
+        goto error_exit;
+    }
+
+    /* create a role. */
+    role = new_role(context, role_name, role_verbs);
+    if (NULL == role)
+    {
+        error_message = "Out of memory creating role in add_role.";
+        goto error_exit;
+    }
+
+    /* insert this role into the rbtree. */
+    retval = rbtree_insert(roles, &role->hdr);
+    if (STATUS_SUCCESS != retval)
+    {
+        error_message = "Out of memory inserting role in add_role.";
+        goto cleanup_role;
+    }
+
+    /* success. */
+    return roles;
+
+cleanup_role:
+    retval = resource_release(&role->hdr);
+    if (STATUS_SUCCESS != retval)
+    {
+        error_message = "Error releasing role resource.";
+    }
+
+error_exit:
+    CONFIG_ERROR(error_message);
+}
+
+/**
+ * \brief Create a new role.
+ */
+static endorse_role* new_role(
+    endorse_config_context* context, const char* role_name, rbtree* role_verbs)
+{
+    status retval;
+    endorse_role* role;
+    const char* error_message;
+    rbtree_node* node;
+    endorse_role_verb* role_verb;
+    char buffer[1024];
+    resource* role_verb_resource;
+    resource* dup;
+
+    /* allocate an endorse_role instance. */
+    retval =
+        rcpr_allocator_allocate(
+            context->alloc, (void**)&role, sizeof(*role));
+    if (STATUS_SUCCESS != retval)
+    {
+        error_message = "Out of memory creating role in new_role.";
+        goto error_exit;
+    }
+
+    /* set up role. */
+    memset(role, 0, sizeof(*role));
+    resource_init(&role->hdr, &role_resource_release);
+    role->alloc = context->alloc;
+    role->name = strdup(role_name);
+    role->reference_count = 1;
+
+    /* create new role verbs tree. */
+    role->verbs = new_role_verbs(context);
+    if (NULL == role->verbs)
+    {
+        error_message = "Out of memory creating role verbs tree in new_role.";
+        goto cleanup_role;
+    }
+
+    /* move verbs to tree. */
+    while (rbtree_count(role_verbs) > 0)
+    {
+        node = rbtree_root_node(role_verbs);
+        role_verb = (endorse_role_verb*)rbtree_node_value(role_verbs, node);
+
+        /* see if this role_verb already exists in the role_verbs treee. */
+        retval = rbtree_find(&dup, role->verbs, role_verb->verb_name);
+        if (STATUS_SUCCESS == retval)
+        {
+            snprintf(
+                buffer, sizeof(buffer), "Duplicate verb `%s' for role `%s'.",
+                role_verb->verb_name, role->name);
+            error_message = buffer;
+            goto cleanup_role;
+        }
+
+        /* delete this node from the role verb tree. */
+        retval =
+            rbtree_delete(
+                &role_verb_resource, role_verbs, role_verb->verb_name);
+        if (STATUS_SUCCESS != retval)
+        {
+            error_message = "Error deleting role verb from role_verb tree.";
+            goto cleanup_role;
+        }
+
+        /* insert this role verb into the role's role verb tree. */
+        retval = rbtree_insert(role->verbs, role_verb_resource);
+        if (STATUS_SUCCESS != retval)
+        {
+            error_message =
+                "Error inserting role verb into role's role verb tree.";
+            goto cleanup_role;
+        }
+    }
+
+    /* success. */
+    return role;
+
+cleanup_role:
+    retval = resource_release(&role->hdr);
+    if (STATUS_SUCCESS != retval)
+    {
+        error_message = "Error releasing role in new_role.";
+    }
+    
+error_exit:
+    CONFIG_ERROR(error_message);
+}
+
+/**
+ * \brief Release a role resource.
+ */
+static status role_resource_release(resource* r)
+{
+    endorse_role* role = (endorse_role*)r;
+    status role_verbs_release_retval = STATUS_SUCCESS;
+    status role_reclaim_retval = STATUS_SUCCESS;
+
+    /* decrement reference count. */
+    --role->reference_count;
+
+    /* if there are still references, don't release this resource. */
+    if (role->reference_count > 0)
+    {
+        return STATUS_SUCCESS;
+    }
+
+    /* cache allocator. */
+    rcpr_allocator* alloc = role->alloc;
+
+    /* free the role name string. */
+    free((void*)role->name);
+
+    /* release the role verbs tree if set. */
+    if (NULL != role->verbs)
+    {
+        role_verbs_release_retval =
+            resource_release(rbtree_resource_handle(role->verbs));
+    }
+
+    /* clear memory. */
+    memset(role, 0, sizeof(*role));
+
+    /* reclaim role. */
+    role_reclaim_retval = rcpr_allocator_reclaim(alloc, role);
+
+    /* decode response code. */
+    if (STATUS_SUCCESS != role_verbs_release_retval)
+    {
+        return role_verbs_release_retval;
+    }
+    else
+    {
+        return role_reclaim_retval;
+    }
 }
 
 /**
