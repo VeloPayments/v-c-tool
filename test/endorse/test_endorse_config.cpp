@@ -919,3 +919,135 @@ TEST(empty_roles)
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
 }
+
+/**
+ * Verify that we can parse a role with verbs.
+ */
+TEST(role_with_verbs)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+    resource* val;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(
+                    entities {
+                        agentd
+                    }
+                    roles for agentd {
+                        reader {
+                            latest_block_id_read
+                            next_block_id_get
+                            prev_block_id_get
+                        }
+                    }
+                )MULTI",
+                scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are no errors. */
+    TEST_ASSERT(0U == user_context->errors->size());
+
+    /* verify user config. */
+    TEST_ASSERT(nullptr != user_context->config);
+    /* There should only be one reference to this config. */
+    TEST_EXPECT(1 == user_context->config->reference_count);
+    /* the entities tree sohuld not be NULL. */
+    TEST_ASSERT(nullptr != user_context->config->entities);
+    /* the number of entities should be three. */
+    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+
+    /* we can find agentd. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            rbtree_find(&val, user_context->config->entities, "agentd"));
+
+    /* examine properties of agentd. */
+    endorse_entity* agentd = (endorse_entity*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(1 == agentd->reference_count);
+    /* the id was declared. */
+    TEST_EXPECT(agentd->id_declared);
+    /* there is one role defined. */
+    TEST_EXPECT(1 == rbtree_count(agentd->roles));
+
+    /* we can find the reader role. */
+    TEST_ASSERT(STATUS_SUCCESS == rbtree_find(&val, agentd->roles, "reader"));
+
+    /* examine properties of the reader role. */
+    endorse_role* reader = (endorse_role*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(1 == reader->reference_count);
+    /* the name is "reader". */
+    TEST_EXPECT(!strcmp(reader->name, "reader"));
+    /* there are three verbs defined for the reader role. */
+    TEST_EXPECT(3 == rbtree_count(reader->verbs));
+
+    /* we can find the latest_block_id_read verb. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            rbtree_find(&val, reader->verbs, "latest_block_id_read"));
+
+    /* examine properties of the latest_block_id_read role_verb. */
+    endorse_role_verb* latest_block_id_read = (endorse_role_verb*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(1 == latest_block_id_read->reference_count);
+    /* the verb name is "latest_block_id_read". */
+    TEST_EXPECT(
+        !strcmp(latest_block_id_read->verb_name, "latest_block_id_read"));
+    /* the verb reference is not set. */
+    TEST_EXPECT(NULL == latest_block_id_read->verb);
+
+    /* we can find the next_block_id_get verb. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            rbtree_find(&val, reader->verbs, "next_block_id_get"));
+
+    /* examine properties of the next_block_id_get role_verb. */
+    endorse_role_verb* next_block_id_get = (endorse_role_verb*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(1 == next_block_id_get->reference_count);
+    /* the verb name is "next_block_id_get". */
+    TEST_EXPECT(
+        !strcmp(next_block_id_get->verb_name, "next_block_id_get"));
+    /* the verb reference is not set. */
+    TEST_EXPECT(NULL == next_block_id_get->verb);
+
+    /* we can find the prev_block_id_get verb. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            rbtree_find(&val, reader->verbs, "prev_block_id_get"));
+
+    /* examine properties of the prev_block_id_get role_verb. */
+    endorse_role_verb* prev_block_id_get = (endorse_role_verb*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(1 == prev_block_id_get->reference_count);
+    /* the verb name is "prev_block_id_get". */
+    TEST_EXPECT(
+        !strcmp(prev_block_id_get->verb_name, "prev_block_id_get"));
+    /* the verb reference is not set. */
+    TEST_EXPECT(NULL == prev_block_id_get->verb);
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
