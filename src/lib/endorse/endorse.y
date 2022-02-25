@@ -88,6 +88,10 @@ static rbtree* add_role(
 static endorse_role* new_role(
     endorse_config_context*, const char*, rbtree*);
 static status role_resource_release(resource* r);
+static rbtree* add_role_verb(endorse_config_context*, rbtree*, const char*);
+static endorse_role_verb* new_role_verb(
+    endorse_config_context*, const char*, endorse_verb*);
+static status role_verb_resource_release(resource* r);
 %}
 
 /* use the full pure API for Bison. */
@@ -198,6 +202,8 @@ role_verbs
     : {
         /* create a new role_verbs block. */
         MAYBE_ASSIGN($$, new_role_verbs(context)); }
+    | role_verbs IDENTIFIER {
+        MAYBE_ASSIGN($$, add_role_verb(context, $1, $2)); }
     ;
 %%
 
@@ -1229,6 +1235,146 @@ static status role_resource_release(resource* r)
     else
     {
         return role_reclaim_retval;
+    }
+}
+
+/**
+ * \brief Add the given role verb to the role verbs tree.
+ */
+static rbtree* add_role_verb(
+    endorse_config_context* context, rbtree* role_verbs, const char* verb_name)
+{
+    status retval;
+    endorse_role_verb* role_verb = NULL;
+    const char* error_message;
+    resource* dup;
+    char buffer[1024];
+
+    /* check to see if the role verb already exists. */
+    retval = rbtree_find(&dup, role_verbs, verb_name);
+    if (STATUS_SUCCESS == retval)
+    {
+        snprintf(
+            buffer, sizeof(buffer), "Duplicate verb `%s' for role.", verb_name);
+        error_message = buffer;
+        goto error_exit;
+    }
+
+    /* create a role_verb. */
+    role_verb = new_role_verb(context, verb_name, NULL);
+    if (NULL == role_verb)
+    {
+        error_message = "Out of memory creating role in add_role_verb.";
+        goto error_exit;
+    }
+
+    /* insert this role verb into the rbtree. */
+    retval = rbtree_insert(role_verbs, &role_verb->hdr);
+    if (STATUS_SUCCESS != retval)
+    {
+        error_message = "Out of memory inserting role_verb in add_role_verb.";
+        goto cleanup_role_verb;
+    }
+
+    /* success. */
+    return role_verbs;
+
+cleanup_role_verb:
+    retval = resource_release(&role_verb->hdr);
+    if (STATUS_SUCCESS != retval)
+    {
+        error_message = "Error releasing role_verb resource.";
+    }
+
+error_exit:
+    CONFIG_ERROR(error_message);
+}
+
+/**
+ * \brief Create a new role verb.
+ */
+static endorse_role_verb* new_role_verb(
+    endorse_config_context* context, const char* verb_name, endorse_verb* verb)
+{
+    status retval;
+    endorse_role_verb* role_verb;
+    const char* error_message;
+
+    /* allocate an endorse_role_verb instance. */
+    retval =
+        rcpr_allocator_allocate(
+            context->alloc, (void**)&role_verb, sizeof(*role_verb));
+    if (STATUS_SUCCESS != retval)
+    {
+        error_message = "Out of memory creating role verb in new_role_verb.";
+        goto error_exit;
+    }
+
+    /* set up role_verb. */
+    memset(role_verb, 0, sizeof(*role_verb));
+    resource_init(&role_verb->hdr, &role_verb_resource_release);
+    role_verb->alloc = context->alloc;
+    role_verb->verb_name = strdup(verb_name);
+    role_verb->verb = verb;
+    role_verb->reference_count = 1;
+
+    /* increment reference count on role_verb->verb if set. */
+    if (NULL != role_verb->verb)
+    {
+        ++role_verb->verb->reference_count;
+    }
+
+    /* success. */
+    return role_verb;
+
+error_exit:
+    CONFIG_ERROR(error_message);
+}
+
+/**
+ * \brief Release a role verb resource.
+ */
+static status role_verb_resource_release(resource* r)
+{
+    endorse_role_verb* role_verb = (endorse_role_verb*)r;
+    status role_verb_verb_release_retval = STATUS_SUCCESS;
+    status role_verb_reclaim_retval = STATUS_SUCCESS;
+
+    /* decrement reference count. */
+    --role_verb->reference_count;
+
+    /* if there are still references, don't release this resource. */
+    if (role_verb->reference_count > 0)
+    {
+        return STATUS_SUCCESS;
+    }
+
+    /* cache allocator. */
+    rcpr_allocator* alloc = role_verb->alloc;
+
+    /* free the verb name string. */
+    free((void*)role_verb->verb_name);
+
+    /* release the verb resource if set. */
+    if (NULL != role_verb->verb)
+    {
+        role_verb_verb_release_retval = resource_release(&role_verb->verb->hdr);
+    }
+
+    /* clear memory. */
+    memset(role_verb, 0, sizeof(*role_verb));
+
+    /* reclaim role_verb. */
+    role_verb_reclaim_retval = rcpr_allocator_reclaim(alloc, role_verb);
+
+    /* decode response code. */
+    if (STATUS_SUCCESS != role_verb_verb_release_retval)
+    {
+        return role_verb_verb_release_retval;
+    }
+    else
+    {
+        return role_verb_reclaim_retval;
     }
 }
 
