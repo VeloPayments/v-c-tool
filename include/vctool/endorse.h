@@ -145,6 +145,19 @@ struct endorse_config_context
 typedef void* yyscan_t;
 #endif /*YY_TYPEDEF_YY_SCANNER_T*/
 
+/**
+ * \brief Analyze the AST produced by the endorse file parser and finish
+ * populating the AST with relevant data.
+ *
+ * \param context       The endorse config context for this parse.
+ * \param root          The AST root to analyze.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_analyze(endorse_config_context* context, endorse_config* root);
+
 /* make this header C++ friendly. */
 #ifdef __cplusplus
 }
