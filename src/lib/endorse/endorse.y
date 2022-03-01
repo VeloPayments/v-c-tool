@@ -684,8 +684,37 @@ static endorse_entity* new_entity(
     entity->verbs = verbs;
     entity->roles = roles;
 
+    /* create verbs rbtree if NULL. */
+    if (NULL == entity->verbs)
+    {
+        entity->verbs = new_verbs(context);
+        if (NULL == entity->verbs)
+        {
+            error_message = "Out of memory creating verbs in new_entity.";
+            goto cleanup_entity;
+        }
+    }
+
+    /* create roles rbtree if NULL. */
+    if (NULL == entity->roles)
+    {
+        entity->roles = new_roles(context);
+        if (NULL == entity->roles)
+        {
+            error_message = "Out of memory creating roles in new_entity.";
+            goto cleanup_entity;
+        }
+    }
+
     /* success. */
     return entity;
+
+cleanup_entity:
+    retval = resource_release(&entity->hdr);
+    if (STATUS_SUCCESS != retval)
+    {
+        error_message = "Error releasing entity in new_entity.";
+    }
 
 error_exit:
     CONFIG_ERROR(error_message);
@@ -1001,14 +1030,6 @@ static status merge_roles(
     endorse_role* role;
     resource* role_resource;
     resource* dup;
-
-    /* simple case: the canonical entity has no roles. */
-    if (NULL == canonical_entity->roles)
-    {
-        canonical_entity->roles = entity->roles;
-        entity->roles = NULL;
-        return STATUS_SUCCESS;
-    }
 
     /* less simple case: we need to merge the roles. */
     while (rbtree_count(entity->roles) > 0)

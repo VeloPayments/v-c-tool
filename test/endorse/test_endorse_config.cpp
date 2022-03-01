@@ -1201,3 +1201,183 @@ TEST(undeclared_entity_semantic_error)
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
 }
+
+/**
+ * Verify that roles with undeclared verbs raise errors in semantic analysis.
+ */
+TEST(undefined_verb_semantic_error)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(
+                entities {
+                    agentd
+                }
+                roles for agentd {
+                    reader {
+                        document_get
+                    }
+                })MULTI", scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are no errors. */
+    TEST_ASSERT(0U == user_context->errors->size());
+
+    /* perform the semantic analysis on this config context. */
+    TEST_ASSERT(
+        STATUS_SUCCESS != endorse_analyze(&context, user_context->config));
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
+
+/**
+ * Verify that in a successful parse, the role's verbs are populated with the
+ * real verb references.
+ */
+TEST(semantic_analyzer_populates_verb_references)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+    resource* val;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(
+                entities {
+                    agentd
+                }
+                verbs for agentd {
+                    latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
+                }
+                roles for agentd {
+                    reader {
+                        latest_block_id_get
+                    }
+                })MULTI", scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are no errors. */
+    TEST_ASSERT(0U == user_context->errors->size());
+
+    /* perform the semantic analysis on this config context. */
+    TEST_ASSERT(
+        STATUS_SUCCESS == endorse_analyze(&context, user_context->config));
+
+    /* verify user config. */
+    TEST_ASSERT(nullptr != user_context->config);
+    /* There should only be one reference to this config. */
+    TEST_EXPECT(1 == user_context->config->reference_count);
+    /* the entities tree sohuld not be NULL. */
+    TEST_ASSERT(nullptr != user_context->config->entities);
+    /* the number of entities should be one. */
+    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+
+    /* we can find agentd. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            rbtree_find(&val, user_context->config->entities, "agentd"));
+
+    /* examine properties of agentd. */
+    endorse_entity* agentd = (endorse_entity*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(1 == agentd->reference_count);
+    /* the id WAS declared. */
+    TEST_EXPECT(agentd->id_declared);
+    /* there is one verb defined. */
+    TEST_EXPECT(1 == rbtree_count(agentd->verbs));
+    /* there is one role defined. */
+    TEST_EXPECT(1 == rbtree_count(agentd->roles));
+
+    /* we can find the latest_block_id_get verb. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            rbtree_find(&val, agentd->verbs, "latest_block_id_get"));
+
+    /* examine properties of latest_block_id_get. */
+    endorse_verb* latest_block_id_get = (endorse_verb*)val;
+    /* it is referenced TWICE. */
+    TEST_EXPECT(2 == latest_block_id_get->reference_count);
+    /* the verb name is "latest_block_id_get" */
+    TEST_EXPECT(0 == strcmp(latest_block_id_get->verb, "latest_block_id_get"));
+    /* the UUID is correct. */
+    const vpr_uuid latest_block_id_get_uuid = { .data = {
+        0xc5, 0xb0, 0xeb, 0x04, 0x6b, 0x24, 0x48, 0xbe,
+        0xb7, 0xd9, 0xbf, 0x90, 0x83, 0xa4, 0xbe, 0x5d } };
+    TEST_EXPECT(
+        0 ==
+            memcmp(
+                &latest_block_id_get->verb_id, &latest_block_id_get_uuid, 16));
+
+    /* we can find the reader role. */
+    TEST_ASSERT(STATUS_SUCCESS == rbtree_find(&val, agentd->roles, "reader"));
+
+    /* examine properties of the reader role. */
+    endorse_role* reader = (endorse_role*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(1 == reader->reference_count);
+    /* the name is "reader". */
+    TEST_EXPECT(!strcmp(reader->name, "reader"));
+    /* one verb is defined for reader. */
+    TEST_EXPECT(1 == rbtree_count(reader->verbs));
+
+    /* we can find the latest_block_id_get role verb. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            rbtree_find(&val, reader->verbs, "latest_block_id_get"));
+
+    /* examine properties of latest_block_id_get. */
+    endorse_role_verb* rv_latest_block_id_get = (endorse_role_verb*)val;
+    /* it is referenced once. */
+    TEST_EXPECT(1 == rv_latest_block_id_get->reference_count);
+    /* the verb name is "latest_block_id_get" */
+    TEST_EXPECT(
+        0 == strcmp(rv_latest_block_id_get->verb_name, "latest_block_id_get"));
+    /* the semantic analyzer added the real verb reference. */
+    TEST_EXPECT(
+        latest_block_id_get == rv_latest_block_id_get->verb);
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
