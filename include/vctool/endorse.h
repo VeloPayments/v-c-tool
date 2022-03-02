@@ -74,6 +74,8 @@ struct endorse_role
     RCPR_SYM(allocator)* alloc;
     int reference_count;
     const char* name;
+    const char* extends_role_name;
+    endorse_role* extends_role;
     RCPR_SYM(rbtree)* verbs;
 };
 

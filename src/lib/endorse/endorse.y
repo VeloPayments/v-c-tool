@@ -84,9 +84,9 @@ static rcpr_comparison_result endorse_role_verbs_compare(
     void*, const void*, const void*);
 static const void* endorse_role_verbs_key(void*, const resource*);
 static rbtree* add_role(
-    endorse_config_context*, rbtree*, const char*, rbtree*);
+    endorse_config_context*, rbtree*, const char*, const char*, rbtree*);
 static endorse_role* new_role(
-    endorse_config_context*, const char*, rbtree*);
+    endorse_config_context*, const char*, const char*, rbtree*);
 static status role_resource_release(resource* r);
 static rbtree* add_role_verb(endorse_config_context*, rbtree*, const char*);
 static endorse_role_verb* new_role_verb(
@@ -195,7 +195,9 @@ roles_block
         /* create a new roles block. */
         MAYBE_ASSIGN($$, new_roles(context)); }
     | roles_block IDENTIFIER LBRACE role_verbs RBRACE {
-        MAYBE_ASSIGN($$, add_role(context, $1, $2, $4)); }
+        MAYBE_ASSIGN($$, add_role(context, $1, $2, NULL, $4)); }
+    | roles_block IDENTIFIER EXTENDS IDENTIFIER LBRACE role_verbs RBRACE {
+        MAYBE_ASSIGN($$, add_role(context, $1, $2, $4, $6)); }
     ;
 
 role_verbs
@@ -1073,7 +1075,7 @@ static status merge_roles(
  */
 static rbtree* add_role(
     endorse_config_context* context, rbtree* roles, const char* role_name,
-    rbtree* role_verbs)
+    const char* extends_role_name, rbtree* role_verbs)
 {
     status retval;
     endorse_role* role = NULL;
@@ -1091,7 +1093,7 @@ static rbtree* add_role(
     }
 
     /* create a role. */
-    role = new_role(context, role_name, role_verbs);
+    role = new_role(context, role_name, extends_role_name, role_verbs);
     if (NULL == role)
     {
         error_message = "Out of memory creating role in add_role.";
@@ -1124,7 +1126,8 @@ error_exit:
  * \brief Create a new role.
  */
 static endorse_role* new_role(
-    endorse_config_context* context, const char* role_name, rbtree* role_verbs)
+    endorse_config_context* context, const char* role_name,
+    const char* extends_role_name, rbtree* role_verbs)
 {
     status retval;
     endorse_role* role;
@@ -1151,6 +1154,12 @@ static endorse_role* new_role(
     role->alloc = context->alloc;
     role->name = strdup(role_name);
     role->reference_count = 1;
+
+    /* if the extends role name is defined, duplicate it. */
+    if (NULL != extends_role_name)
+    {
+        role->extends_role_name = strdup(extends_role_name);
+    }
 
     /* create new role verbs tree. */
     role->verbs = new_role_verbs(context);
@@ -1234,6 +1243,12 @@ static status role_resource_release(resource* r)
 
     /* free the role name string. */
     free((void*)role->name);
+
+    /* if the extends role name is set, free it. */
+    if (NULL != role->extends_role_name)
+    {
+        free((void*)role->extends_role_name);
+    }
 
     /* release the role verbs tree if set. */
     if (NULL != role->verbs)

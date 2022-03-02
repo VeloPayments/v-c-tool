@@ -1381,3 +1381,106 @@ TEST(semantic_analyzer_populates_verb_references)
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
 }
+
+/**
+ * A role can inherit another role via the extends keyword.
+ */
+TEST(role_extends)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+    resource* val;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(
+                entities {
+                    agentd
+                }
+                roles for agentd {
+                    reader {
+                        latest_block_id_get
+                    }
+                    writer extends reader {
+                        transaction_submit
+                    }
+                })MULTI", scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are no errors. */
+    TEST_ASSERT(0U == user_context->errors->size());
+
+    /* verify user config. */
+    TEST_ASSERT(nullptr != user_context->config);
+    /* There should only be one reference to this config. */
+    TEST_EXPECT(1 == user_context->config->reference_count);
+    /* the entities tree sohuld not be NULL. */
+    TEST_ASSERT(nullptr != user_context->config->entities);
+    /* the number of entities should be one. */
+    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+
+    /* we can find agentd. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            rbtree_find(&val, user_context->config->entities, "agentd"));
+
+    /* examine properties of agentd. */
+    endorse_entity* agentd = (endorse_entity*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(1 == agentd->reference_count);
+    /* the id WAS declared. */
+    TEST_EXPECT(agentd->id_declared);
+    /* there are two roles defined. */
+    TEST_EXPECT(2 == rbtree_count(agentd->roles));
+
+    /* we can find the reader role. */
+    TEST_ASSERT(STATUS_SUCCESS == rbtree_find(&val, agentd->roles, "reader"));
+
+    /* examine properties of the reader role. */
+    endorse_role* reader = (endorse_role*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(1 == reader->reference_count);
+    /* the name is "reader". */
+    TEST_EXPECT(!strcmp(reader->name, "reader"));
+    /* one verb is defined for reader. */
+    TEST_EXPECT(1 == rbtree_count(reader->verbs));
+    /* the reader role does not extend any other role. */
+    TEST_EXPECT(NULL == reader->extends_role_name);
+
+    /* we can find the writer role. */
+    TEST_ASSERT(STATUS_SUCCESS == rbtree_find(&val, agentd->roles, "writer"));
+
+    /* examine properties of the writer role. */
+    endorse_role* writer = (endorse_role*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(1 == writer->reference_count);
+    /* the name is "writer". */
+    TEST_EXPECT(!strcmp(writer->name, "writer"));
+    /* one verb is defined for writer. */
+    TEST_EXPECT(1 == rbtree_count(writer->verbs));
+    /* the writer role extends the reader role. */
+    TEST_ASSERT(NULL != writer->extends_role_name);
+    TEST_EXPECT(0 == strcmp(writer->extends_role_name, "reader"));
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
