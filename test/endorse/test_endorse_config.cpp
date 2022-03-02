@@ -142,7 +142,7 @@ TEST(empty_config)
     TEST_ASSERT(nullptr != user_context->config);
     /* There should only be one reference to this config. */
     TEST_EXPECT(1 == user_context->config->reference_count);
-    /* the entities tree sohuld not be NULL. */
+    /* the entities tree should not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be zero. */
     TEST_EXPECT(0 == rbtree_count(user_context->config->entities));
@@ -223,7 +223,7 @@ TEST(empty_entities_block)
     TEST_ASSERT(nullptr != user_context->config);
     /* There should only be one reference to this config. */
     TEST_EXPECT(1 == user_context->config->reference_count);
-    /* the entities tree sohuld not be NULL. */
+    /* the entities tree should not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be zero. */
     TEST_EXPECT(0 == rbtree_count(user_context->config->entities));
@@ -270,7 +270,7 @@ TEST(entities_block)
     TEST_ASSERT(nullptr != user_context->config);
     /* There should only be one reference to this config. */
     TEST_EXPECT(1 == user_context->config->reference_count);
-    /* the entities tree sohuld not be NULL. */
+    /* the entities tree should not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be three. */
     TEST_EXPECT(3 == rbtree_count(user_context->config->entities));
@@ -370,7 +370,7 @@ TEST(empty_verb_block)
     TEST_ASSERT(nullptr != user_context->config);
     /* There should only be one reference to this config. */
     TEST_EXPECT(1 == user_context->config->reference_count);
-    /* the entities tree sohuld not be NULL. */
+    /* the entities tree should not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be three. */
     TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
@@ -436,7 +436,7 @@ TEST(empty_verb_block_declared_entity)
     TEST_ASSERT(nullptr != user_context->config);
     /* There should only be one reference to this config. */
     TEST_EXPECT(1 == user_context->config->reference_count);
-    /* the entities tree sohuld not be NULL. */
+    /* the entities tree should not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be three. */
     TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
@@ -504,7 +504,7 @@ TEST(verb_block_with_verbs)
     TEST_ASSERT(nullptr != user_context->config);
     /* There should only be one reference to this config. */
     TEST_EXPECT(1 == user_context->config->reference_count);
-    /* the entities tree sohuld not be NULL. */
+    /* the entities tree should not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be three. */
     TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
@@ -712,7 +712,7 @@ TEST(empty_roles_block)
     TEST_ASSERT(nullptr != user_context->config);
     /* There should only be one reference to this config. */
     TEST_EXPECT(1 == user_context->config->reference_count);
-    /* the entities tree sohuld not be NULL. */
+    /* the entities tree should not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be three. */
     TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
@@ -782,7 +782,7 @@ TEST(empty_roles_block_declared_entity)
     TEST_ASSERT(nullptr != user_context->config);
     /* There should only be one reference to this config. */
     TEST_EXPECT(1 == user_context->config->reference_count);
-    /* the entities tree sohuld not be NULL. */
+    /* the entities tree should not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be three. */
     TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
@@ -855,7 +855,7 @@ TEST(empty_roles)
     TEST_ASSERT(nullptr != user_context->config);
     /* There should only be one reference to this config. */
     TEST_EXPECT(1 == user_context->config->reference_count);
-    /* the entities tree sohuld not be NULL. */
+    /* the entities tree should not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be three. */
     TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
@@ -1019,7 +1019,7 @@ TEST(role_with_verbs)
     TEST_ASSERT(nullptr != user_context->config);
     /* There should only be one reference to this config. */
     TEST_EXPECT(1 == user_context->config->reference_count);
-    /* the entities tree sohuld not be NULL. */
+    /* the entities tree should not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be three. */
     TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
@@ -1306,7 +1306,7 @@ TEST(semantic_analyzer_populates_verb_references)
     TEST_ASSERT(nullptr != user_context->config);
     /* There should only be one reference to this config. */
     TEST_EXPECT(1 == user_context->config->reference_count);
-    /* the entities tree sohuld not be NULL. */
+    /* the entities tree should not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be one. */
     TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
@@ -1430,7 +1430,7 @@ TEST(role_extends)
     TEST_ASSERT(nullptr != user_context->config);
     /* There should only be one reference to this config. */
     TEST_EXPECT(1 == user_context->config->reference_count);
-    /* the entities tree sohuld not be NULL. */
+    /* the entities tree should not be NULL. */
     TEST_ASSERT(nullptr != user_context->config->entities);
     /* the number of entities should be one. */
     TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
@@ -1477,6 +1477,132 @@ TEST(role_extends)
     /* the writer role extends the reader role. */
     TEST_ASSERT(NULL != writer->extends_role_name);
     TEST_EXPECT(0 == strcmp(writer->extends_role_name, "reader"));
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
+
+/**
+ * During semantic analysis, role inheritance populates the inherited role as
+ * tell as all verbs supported by the role.
+ */
+TEST(role_extends_semantic_analysis)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+    resource* val;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(
+                entities {
+                    agentd
+                }
+                verbs for agentd {
+                    latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
+                    next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
+                    prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
+                    block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
+                    transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
+                    transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
+                    artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+                    assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
+                    sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
+                }
+                roles for agentd {
+                    reader {
+                        latest_block_id_get
+                        block_get
+                    }
+                    writer extends reader {
+                        transaction_submit
+                    }
+                })MULTI", scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are no errors. */
+    TEST_ASSERT(0U == user_context->errors->size());
+
+    /* perform the semantic analysis on this config context. */
+    TEST_ASSERT(
+        STATUS_SUCCESS == endorse_analyze(&context, user_context->config));
+
+    /* verify user config. */
+    TEST_ASSERT(nullptr != user_context->config);
+    /* There should only be one reference to this config. */
+    TEST_EXPECT(1 == user_context->config->reference_count);
+    /* the entities tree should not be NULL. */
+    TEST_ASSERT(nullptr != user_context->config->entities);
+    /* the number of entities should be one. */
+    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+
+    /* we can find agentd. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            rbtree_find(&val, user_context->config->entities, "agentd"));
+
+    /* examine properties of agentd. */
+    endorse_entity* agentd = (endorse_entity*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(1 == agentd->reference_count);
+    /* the id WAS declared. */
+    TEST_EXPECT(agentd->id_declared);
+    /* there are nine verbs defined. */
+    TEST_EXPECT(9 == rbtree_count(agentd->verbs));
+    /* there are two roles defined. */
+    TEST_EXPECT(2 == rbtree_count(agentd->roles));
+
+    /* we can find the reader role. */
+    TEST_ASSERT(STATUS_SUCCESS == rbtree_find(&val, agentd->roles, "reader"));
+
+    /* examine properties of the reader role. */
+    endorse_role* reader = (endorse_role*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(2 == reader->reference_count);
+    /* the name is "reader". */
+    TEST_EXPECT(!strcmp(reader->name, "reader"));
+    /* two verbs are defined for reader. */
+    TEST_EXPECT(2 == rbtree_count(reader->verbs));
+    /* the reader role does not extend any other role. */
+    TEST_EXPECT(NULL == reader->extends_role_name);
+    /* the reader role extends_role pointer is NULL. */
+    TEST_EXPECT(NULL == reader->extends_role);
+
+    /* we can find the writer role. */
+    TEST_ASSERT(STATUS_SUCCESS == rbtree_find(&val, agentd->roles, "writer"));
+
+    /* examine properties of the writer role. */
+    endorse_role* writer = (endorse_role*)val;
+    /* this is only referenced once. */
+    TEST_EXPECT(1 == writer->reference_count);
+    /* the name is "writer". */
+    TEST_EXPECT(!strcmp(writer->name, "writer"));
+    /* THREE verbs are defined for writer. */
+    TEST_EXPECT(3 == rbtree_count(writer->verbs));
+    /* the writer role extends the reader role. */
+    TEST_ASSERT(NULL != writer->extends_role_name);
+    TEST_EXPECT(0 == strcmp(writer->extends_role_name, "reader"));
+    /* the extended role is the reader role. */
+    TEST_EXPECT(reader == writer->extends_role);
 
     /* clean up. */
     TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
