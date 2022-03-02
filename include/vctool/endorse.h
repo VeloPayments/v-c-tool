@@ -72,6 +72,7 @@ struct endorse_role
 {
     RCPR_SYM(resource) hdr;
     RCPR_SYM(allocator)* alloc;
+    bool type_complete;
     int reference_count;
     const char* name;
     const char* extends_role_name;
