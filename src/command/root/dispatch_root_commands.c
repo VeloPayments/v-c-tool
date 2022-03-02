@@ -3,12 +3,13 @@
  *
  * \brief Dispatch root commands.
  *
- * \copyright 2020 Velo Payments.  See License.txt for license terms.
+ * \copyright 2020-2022 Velo Payments.  See License.txt for license terms.
  */
 
 #include <cbmc/model_assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <vctool/command/endorse.h>
 #include <vctool/command/help.h>
 #include <vctool/command/keygen.h>
 #include <vctool/command/pubkey.h>
@@ -58,6 +59,11 @@ int dispatch_root_commands(commandline_opts* opts, int argc, char* argv[])
     else if (!strcmp(command, "pubkey"))
     {
         return process_pubkey_command(opts, argc, argv);
+    }
+    /* is this the endorse command? */
+    else if (!strcmp(command, "endorse"))
+    {
+        return process_endorse_command(opts, argc, argv);
     }
     /* handle unknown command. */
     else
