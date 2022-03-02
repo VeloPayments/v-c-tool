@@ -111,17 +111,10 @@ static status endorse_analyze_entity_roles(
     bool incomplete_types_found = false;
     char buffer[1024];
     int resolved_count = 0;
+    endorse_role* last_incomplete_type = NULL;
 
     /* get the nil node. */
     nil = rbtree_nil_node(entity->roles);
-
-    /* get the root node. */
-    node = rbtree_root_node(entity->roles);
-    if (nil == node)
-    {
-        /* no roles. */
-        return STATUS_SUCCESS;
-    }
 
     /* outer loop -- keep iterating while incomplete types are found. */
     do
@@ -130,6 +123,14 @@ static status endorse_analyze_entity_roles(
          * count.*/
         incomplete_types_found = false;
         resolved_count = 0;
+
+        /* get the root node. */
+        node = rbtree_root_node(entity->roles);
+        if (nil == node)
+        {
+            /* no roles. */
+            return STATUS_SUCCESS;
+        }
 
         /* iterate through all roles. */
         for (
@@ -144,7 +145,7 @@ static status endorse_analyze_entity_roles(
             /* if the role type is complete, we can skip it. */
             if (role->type_complete)
             {
-                continue;
+                goto next_role;
             }
 
             /* if we haven't looked up the extends role, look it up. */
@@ -154,8 +155,9 @@ static status endorse_analyze_entity_roles(
 
                 /* look up this role. */
                 retval =
-                    rbtree_find(&extends_resource, entity->roles,
-                    role->extends_role_name);
+                    rbtree_find(
+                        &extends_resource, entity->roles,
+                        role->extends_role_name);
                 if (STATUS_SUCCESS != retval)
                 {
                     snprintf(
@@ -180,7 +182,8 @@ static status endorse_analyze_entity_roles(
                     {
                         incomplete_types_found = true;
                         role->extends_role = NULL;
-                        continue;
+                        last_incomplete_type = role;
+                        goto next_role;
                     }
 
                     /* otherwise, increment the reference count on the extends
@@ -209,9 +212,21 @@ static status endorse_analyze_entity_roles(
              * count. */
             role->type_complete = true;
             ++resolved_count;
+
+        next_role:
         }
 
-        /* TODO - verify that no circular references were detected. */
+        /* check for a circular reference. */
+        if (incomplete_types_found && 0 == resolved_count)
+        {
+            snprintf(
+                buffer, sizeof(buffer),
+                "Entity `%s' role `%s' extends a circular inheritance loop.\n",
+                entity->id, last_incomplete_type->name);
+            context->set_error(context, buffer);
+            fail = true;
+            break;
+        }
 
     } while (incomplete_types_found);
 
