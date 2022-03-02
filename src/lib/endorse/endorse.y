@@ -1227,6 +1227,7 @@ static status role_resource_release(resource* r)
 {
     endorse_role* role = (endorse_role*)r;
     status role_verbs_release_retval = STATUS_SUCCESS;
+    status role_extends_release_retval = STATUS_SUCCESS;
     status role_reclaim_retval = STATUS_SUCCESS;
 
     /* decrement reference count. */
@@ -1257,6 +1258,13 @@ static status role_resource_release(resource* r)
             resource_release(rbtree_resource_handle(role->verbs));
     }
 
+    /* release the extended role if set. */
+    if (NULL != role->extends_role)
+    {
+        role_extends_release_retval =
+            resource_release(&role->extends_role->hdr);
+    }
+
     /* clear memory. */
     memset(role, 0, sizeof(*role));
 
@@ -1267,6 +1275,10 @@ static status role_resource_release(resource* r)
     if (STATUS_SUCCESS != role_verbs_release_retval)
     {
         return role_verbs_release_retval;
+    }
+    else if (STATUS_SUCCESS != role_extends_release_retval)
+    {
+        return role_extends_release_retval;
     }
     else
     {
