@@ -1610,3 +1610,283 @@ TEST(role_extends_semantic_analysis)
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
 }
+
+/**
+ * During semantic analysis, a circular role inheritance graph causes an error.
+ * Simple circle - role references itself.
+ */
+TEST(role_extends_analysis_circular_n0)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(
+                entities {
+                    agentd
+                }
+                verbs for agentd {
+                    latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
+                    next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
+                    prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
+                    block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
+                    transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
+                    transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
+                    artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+                    assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
+                    sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
+                }
+                roles for agentd {
+                    reader {
+                        latest_block_id_get
+                        block_get
+                    }
+                    writer extends writer {
+                        transaction_submit
+                    }
+                })MULTI", scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are no errors. */
+    TEST_ASSERT(0U == user_context->errors->size());
+
+    /* Semantic analysis fails due to circular reference. */
+    TEST_ASSERT(
+        STATUS_SUCCESS != endorse_analyze(&context, user_context->config));
+
+    /* errors were set. */
+    TEST_ASSERT(0U != user_context->errors->size());
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
+
+/**
+ * During semantic analysis, a circular role inheritance graph causes an error.
+ * N1 circle.
+ */
+TEST(role_extends_analysis_circular_n1)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(
+                entities {
+                    agentd
+                }
+                verbs for agentd {
+                    latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
+                    next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
+                    prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
+                    block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
+                    transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
+                    transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
+                    artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+                    assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
+                    sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
+                }
+                roles for agentd {
+                    reader extends writer {
+                        latest_block_id_get
+                        block_get
+                    }
+                    writer extends reader {
+                        transaction_submit
+                    }
+                })MULTI", scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are no errors. */
+    TEST_ASSERT(0U == user_context->errors->size());
+
+    /* Semantic analysis fails due to circular reference. */
+    TEST_ASSERT(
+        STATUS_SUCCESS != endorse_analyze(&context, user_context->config));
+
+    /* errors were set. */
+    TEST_ASSERT(0U != user_context->errors->size());
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
+
+/**
+ * During semantic analysis, a circular role inheritance graph causes an error.
+ * N2 circle.
+ */
+TEST(role_extends_analysis_circular_n2)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(
+                entities {
+                    agentd
+                }
+                verbs for agentd {
+                    latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
+                    next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
+                    prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
+                    block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
+                    transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
+                    transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
+                    artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+                    assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
+                    sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
+                }
+                roles for agentd {
+                    a extends b {
+                    }
+                    b extends c {
+                    }
+                    c extends a {
+                    }
+                })MULTI", scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are no errors. */
+    TEST_ASSERT(0U == user_context->errors->size());
+
+    /* Semantic analysis fails due to circular reference. */
+    TEST_ASSERT(
+        STATUS_SUCCESS != endorse_analyze(&context, user_context->config));
+
+    /* errors were set. */
+    TEST_ASSERT(0U != user_context->errors->size());
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
+
+/**
+ * During semantic analysis, a circular role inheritance graph causes an error.
+ * N3 circle.
+ */
+TEST(role_extends_analysis_circular_n3)
+{
+    YY_BUFFER_STATE state;
+    yyscan_t scanner;
+    endorse_config_context context;
+    test_context* user_context;
+    rcpr_allocator* alloc;
+
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+
+    context.alloc = alloc;
+    context.set_error = &set_error;
+    context.val_callback = &config_callback;
+    context.user_context = user_context;
+
+    TEST_ASSERT(0 == yylex_init(&scanner));
+    TEST_ASSERT(nullptr != 
+        (state =
+            yy_scan_string(
+                R"MULTI(
+                entities {
+                    agentd
+                }
+                verbs for agentd {
+                    latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
+                    next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
+                    prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
+                    block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
+                    transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
+                    transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
+                    artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+                    assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
+                    sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
+                }
+                roles for agentd {
+                    a extends b {
+                    }
+                    b extends c {
+                    }
+                    c extends d {
+                    }
+                    d extends a {
+                    }
+                })MULTI", scanner)));
+    TEST_ASSERT(0 == yyparse(scanner, &context));
+    yy_delete_buffer(state, scanner);
+    yylex_destroy(scanner);
+
+    /* there are no errors. */
+    TEST_ASSERT(0U == user_context->errors->size());
+
+    /* Semantic analysis fails due to circular reference. */
+    TEST_ASSERT(
+        STATUS_SUCCESS != endorse_analyze(&context, user_context->config));
+
+    /* errors were set. */
+    TEST_ASSERT(0U != user_context->errors->size());
+
+    /* clean up. */
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+}
