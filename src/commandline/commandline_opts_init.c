@@ -3,7 +3,7 @@
  *
  * \brief Parse the commandline, creating an options structure.
  *
- * \copyright 2020 Velo Payments.  See License.txt for license terms.
+ * \copyright 2020-2022 Velo Payments.  See License.txt for license terms.
  */
 
 #include <cbmc/model_assert.h>
@@ -21,6 +21,7 @@ static void commandline_opts_dispose(void* disp);
  * \brief Parse command-line options, initializing a commandline_opts structure.
  *
  * \param opts          The commandline_opts structure to initialize.
+ * \param alloc         The RCPR allocator to use.
  * \param file          The file abstraction layer to use.
  * \param suite         The crypto suite to use.
  * \param builder_opts  The certificate builder options to use.
@@ -31,8 +32,9 @@ static void commandline_opts_dispose(void* disp);
  *      - VCTOOL_STATUS_SUCCESS on success.
  */
 int commandline_opts_init(
-    commandline_opts* opts, file* file, vccrypt_suite_options_t* suite,
-    vccert_builder_options_t* builder_opts, int argc, char* argv[])
+    commandline_opts* opts, RCPR_SYM(allocator)* alloc, file* file,
+    vccrypt_suite_options_t* suite, vccert_builder_options_t* builder_opts,
+    int argc, char* argv[])
 {
     int ch, retval, rounds;
 
@@ -59,7 +61,7 @@ int commandline_opts_init(
     }
 
     /* initialize root command structure. */
-    retval = root_command_init(root);
+    retval = root_command_init(root, alloc);
     if (VCTOOL_STATUS_SUCCESS != retval)
     {
         goto cleanup_root_command;

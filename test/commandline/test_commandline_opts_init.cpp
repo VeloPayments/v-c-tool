@@ -17,6 +17,10 @@
 
 using namespace std;
 
+RCPR_IMPORT_allocator_as(rcpr);
+RCPR_IMPORT_rbtree;
+RCPR_IMPORT_resource;
+
 /* start of the test suite. */
 TEST_SUITE(commandline_opts_init);
 
@@ -24,6 +28,7 @@ TEST_SUITE(commandline_opts_init);
 TEST(no_arguments)
 {
     allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
     vccrypt_suite_options_t suite;
     file f;
     vccert_builder_options_t builder_opts;
@@ -36,6 +41,9 @@ TEST(no_arguments)
 
     /* create malloc allocator. */
     malloc_allocator_options_init(&alloc_opts);
+
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
     /* create the mock file. */
     TEST_ASSERT(
@@ -86,12 +94,16 @@ TEST(no_arguments)
     /* calling commandline_opts_init with no arguments should fail. */
     TEST_EXPECT(
         VCTOOL_ERROR_COMMANDLINE_MISSING_ARGUMENT ==
-            commandline_opts_init(&opts, &f, &suite, &builder_opts, 0, argv));
+            commandline_opts_init(
+                &opts, alloc, &f, &suite, &builder_opts, 0, argv));
 
     /* clean up. */
     dispose((disposable_t*)&builder_opts);
     dispose((disposable_t*)&suite);
     dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
     dispose((disposable_t*)&alloc_opts);
 }
 
@@ -99,6 +111,7 @@ TEST(no_arguments)
 TEST(question_mark_argument)
 {
     allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
     vccrypt_suite_options_t suite;
     file f;
     vccert_builder_options_t builder_opts;
@@ -114,6 +127,9 @@ TEST(question_mark_argument)
     /* create malloc allocator. */
     malloc_allocator_options_init(&alloc_opts);
 
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
     /* create the mock file. */
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
@@ -164,7 +180,7 @@ TEST(question_mark_argument)
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
             commandline_opts_init(
-                &opts, &f, &suite, &builder_opts, argc, argv));
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
 
     /* the help command is set. */
     TEST_ASSERT(NULL != opts.cmd);
@@ -174,6 +190,9 @@ TEST(question_mark_argument)
     dispose((disposable_t*)&builder_opts);
     dispose((disposable_t*)&suite);
     dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
     dispose((disposable_t*)&alloc_opts);
 }
 
@@ -181,6 +200,7 @@ TEST(question_mark_argument)
 TEST(h_argument)
 {
     allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
     vccrypt_suite_options_t suite;
     file f;
     vccert_builder_options_t builder_opts;
@@ -196,6 +216,9 @@ TEST(h_argument)
     /* create malloc allocator. */
     malloc_allocator_options_init(&alloc_opts);
 
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
     /* create the mock file. */
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
@@ -246,7 +269,7 @@ TEST(h_argument)
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
             commandline_opts_init(
-                &opts, &f, &suite, &builder_opts, argc, argv));
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
 
     /* the help command is set. */
     TEST_ASSERT(NULL != opts.cmd);
@@ -256,6 +279,9 @@ TEST(h_argument)
     dispose((disposable_t*)&builder_opts);
     dispose((disposable_t*)&suite);
     dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
     dispose((disposable_t*)&alloc_opts);
 }
 
@@ -263,6 +289,7 @@ TEST(h_argument)
 TEST(N_argument)
 {
     allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
     vccrypt_suite_options_t suite;
     file f;
     vccert_builder_options_t builder_opts;
@@ -281,6 +308,9 @@ TEST(N_argument)
     /* create malloc allocator. */
     malloc_allocator_options_init(&alloc_opts);
 
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
     /* create the mock file. */
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
@@ -331,7 +361,7 @@ TEST(N_argument)
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
             commandline_opts_init(
-                &opts, &f, &suite, &builder_opts, argc, argv));
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
 
     /* the help command is set. */
     TEST_ASSERT(NULL != opts.cmd);
@@ -349,6 +379,9 @@ TEST(N_argument)
     dispose((disposable_t*)&builder_opts);
     dispose((disposable_t*)&suite);
     dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
     dispose((disposable_t*)&alloc_opts);
 }
 
@@ -356,6 +389,7 @@ TEST(N_argument)
 TEST(k_argument)
 {
     allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
     vccrypt_suite_options_t suite;
     file f;
     vccert_builder_options_t builder_opts;
@@ -375,6 +409,9 @@ TEST(k_argument)
     /* create malloc allocator. */
     malloc_allocator_options_init(&alloc_opts);
 
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
     /* create the mock file. */
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
@@ -425,7 +462,7 @@ TEST(k_argument)
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
             commandline_opts_init(
-                &opts, &f, &suite, &builder_opts, argc, argv));
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
 
     /* the help command is set. */
     TEST_ASSERT(NULL != opts.cmd);
@@ -444,6 +481,9 @@ TEST(k_argument)
     dispose((disposable_t*)&builder_opts);
     dispose((disposable_t*)&suite);
     dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
     dispose((disposable_t*)&alloc_opts);
 }
 
@@ -451,6 +491,7 @@ TEST(k_argument)
 TEST(k_argument_multiple)
 {
     allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
     vccrypt_suite_options_t suite;
     file f;
     vccert_builder_options_t builder_opts;
@@ -473,6 +514,9 @@ TEST(k_argument_multiple)
     /* create malloc allocator. */
     malloc_allocator_options_init(&alloc_opts);
 
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
     /* create the mock file. */
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
@@ -523,12 +567,15 @@ TEST(k_argument_multiple)
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS !=
             commandline_opts_init(
-                &opts, &f, &suite, &builder_opts, argc, argv));
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
 
     /* clean up. */
     dispose((disposable_t*)&builder_opts);
     dispose((disposable_t*)&suite);
     dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
     dispose((disposable_t*)&alloc_opts);
 }
 
@@ -536,6 +583,7 @@ TEST(k_argument_multiple)
 TEST(o_argument)
 {
     allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
     vccrypt_suite_options_t suite;
     file f;
     vccert_builder_options_t builder_opts;
@@ -554,6 +602,9 @@ TEST(o_argument)
 
     /* create malloc allocator. */
     malloc_allocator_options_init(&alloc_opts);
+
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
     /* create the mock file. */
     TEST_ASSERT(
@@ -605,7 +656,7 @@ TEST(o_argument)
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
             commandline_opts_init(
-                &opts, &f, &suite, &builder_opts, argc, argv));
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
 
     /* the help command is set. */
     TEST_ASSERT(NULL != opts.cmd);
@@ -624,6 +675,9 @@ TEST(o_argument)
     dispose((disposable_t*)&builder_opts);
     dispose((disposable_t*)&suite);
     dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
     dispose((disposable_t*)&alloc_opts);
 }
 
@@ -631,6 +685,7 @@ TEST(o_argument)
 TEST(o_argument_multiple)
 {
     allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
     vccrypt_suite_options_t suite;
     file f;
     vccert_builder_options_t builder_opts;
@@ -653,6 +708,9 @@ TEST(o_argument_multiple)
     /* create malloc allocator. */
     malloc_allocator_options_init(&alloc_opts);
 
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
     /* create the mock file. */
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
@@ -703,12 +761,15 @@ TEST(o_argument_multiple)
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS !=
             commandline_opts_init(
-                &opts, &f, &suite, &builder_opts, argc, argv));
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
 
     /* clean up. */
     dispose((disposable_t*)&builder_opts);
     dispose((disposable_t*)&suite);
     dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
     dispose((disposable_t*)&alloc_opts);
 }
 
@@ -716,6 +777,7 @@ TEST(o_argument_multiple)
 TEST(R_argument)
 {
     allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
     vccrypt_suite_options_t suite;
     file f;
     vccert_builder_options_t builder_opts;
@@ -735,6 +797,9 @@ TEST(R_argument)
     /* create malloc allocator. */
     malloc_allocator_options_init(&alloc_opts);
 
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
     /* create the mock file. */
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
@@ -785,7 +850,7 @@ TEST(R_argument)
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
             commandline_opts_init(
-                &opts, &f, &suite, &builder_opts, argc, argv));
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
 
     /* the help command is set. */
     TEST_ASSERT(NULL != opts.cmd);
@@ -803,6 +868,9 @@ TEST(R_argument)
     dispose((disposable_t*)&builder_opts);
     dispose((disposable_t*)&suite);
     dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
     dispose((disposable_t*)&alloc_opts);
 }
 
@@ -810,6 +878,7 @@ TEST(R_argument)
 TEST(R_range_check)
 {
     allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
     vccrypt_suite_options_t suite;
     file f;
     vccert_builder_options_t builder_opts;
@@ -829,6 +898,96 @@ TEST(R_range_check)
     /* create malloc allocator. */
     malloc_allocator_options_init(&alloc_opts);
 
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    /* create the mock file. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS ==
+            file_mock_init(
+                &f,
+                /* stat. */
+                [&](file*, const char*, file_stat_st*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* open. */
+                [&](file*, int*, const char*, int, mode_t) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* close. */
+                [&](file*, int) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* read. */
+                [&](file*, int, void*, size_t, size_t*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* write. */
+                [&](
+                    file*, int, const void*, size_t, size_t*) -> int {
+                        return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* lseek. */
+                [&](file*, int, off_t, file_lseek_whence, off_t*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                [&](file*, int) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                }));
+
+    /* create a mock crypto suite. */
+    TEST_ASSERT(
+        VCCRYPT_STATUS_SUCCESS ==
+        vccrypt_mock_suite_options_init(
+            &suite, &alloc_opts));
+
+    /* create a builder options instance. */
+    TEST_ASSERT(
+        VCCRYPT_STATUS_SUCCESS ==
+            vccert_builder_options_init(
+                &builder_opts, &alloc_opts, &suite));
+
+    /* calling commandline_opts_init should fail. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS !=
+            commandline_opts_init(
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
+
+    /* clean up. */
+    dispose((disposable_t*)&opts);
+    dispose((disposable_t*)&builder_opts);
+    dispose((disposable_t*)&suite);
+    dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+    dispose((disposable_t*)&alloc_opts);
+}
+
+/* By default, the dictionary in the root command structure is empty. */
+TEST(empty_dict)
+{
+    allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
+    vccrypt_suite_options_t suite;
+    file f;
+    vccert_builder_options_t builder_opts;
+    string exe_name = "vctool";
+    string help_argument = "help";
+    char* argv[] = {
+        (char*)exe_name.c_str(), (char*)help_argument.c_str() };
+    int argc = sizeof(argv) / sizeof(char*);
+    commandline_opts opts;
+
+    /* register the mock crypto suite. */
+    vccrypt_suite_register_mock();
+
+    /* create malloc allocator. */
+    malloc_allocator_options_init(&alloc_opts);
+
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
     /* create the mock file. */
     TEST_ASSERT(
         VCTOOL_STATUS_SUCCESS ==
@@ -877,14 +1036,29 @@ TEST(R_range_check)
 
     /* calling commandline_opts_init should succeed. */
     TEST_ASSERT(
-        VCTOOL_STATUS_SUCCESS !=
+        VCTOOL_STATUS_SUCCESS ==
             commandline_opts_init(
-                &opts, &f, &suite, &builder_opts, argc, argv));
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
+
+    /* the help command is set. */
+    TEST_ASSERT(NULL != opts.cmd);
+
+    /* get the root command. */
+    command* cmd = opts.cmd;
+    while (cmd->next != NULL) cmd = cmd->next;
+    root_command* root = (root_command*)cmd;
+
+    /* the root command dictionary is empty. */
+    TEST_ASSERT(NULL != root->dict);
+    TEST_EXPECT(0 == rbtree_count(root->dict));
 
     /* clean up. */
     dispose((disposable_t*)&opts);
     dispose((disposable_t*)&builder_opts);
     dispose((disposable_t*)&suite);
     dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
     dispose((disposable_t*)&alloc_opts);
 }

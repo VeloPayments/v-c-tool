@@ -3,7 +3,7 @@
  *
  * \brief Main entry point for the vctool utility.
  *
- * \copyright 2020 Velo Payments.  See License.txt for license terms.
+ * \copyright 2020-2022 Velo Payments.  See License.txt for license terms.
  */
 
 #include <stdio.h>
@@ -15,6 +15,9 @@
 #include <vctool/status_codes.h>
 #include <vpr/allocator/malloc_allocator.h>
 
+RCPR_IMPORT_allocator_as(rcpr);
+RCPR_IMPORT_resource;
+
 /**
  * \brief Main entry point for vctool.
  *
@@ -25,9 +28,10 @@
  */
 int main(int argc, char* argv[])
 {
-    int retval;
+    int retval, release_retval;
     commandline_opts opts;
     allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
     vccrypt_suite_options_t suite;
     vccert_builder_options_t builder_opts;
     file file;
@@ -64,16 +68,24 @@ int main(int argc, char* argv[])
         goto cleanup_builder_opts;
     }
 
+    /* create an RCPR allocator instance. */
+    retval = rcpr_malloc_allocator_create(&alloc);
+    if (STATUS_SUCCESS != retval)
+    {
+        fprintf(stderr, "Error creating RCPR allocator.\n");
+        goto cleanup_file;
+    }
+
     /* parse command-line options. */
     retval =
         commandline_opts_init(
-            &opts, &file, &suite, &builder_opts, argc, argv);
+            &opts, alloc, &file, &suite, &builder_opts, argc, argv);
     if (VCTOOL_STATUS_SUCCESS != retval)
     {
         fprintf(stderr, "Error parsing command-line options.\n\n");
         help_print(stderr);
 
-        goto cleanup_file;
+        goto cleanup_rcpr_allocator;
     }
 
     /* attempt to execute the command. */
@@ -81,6 +93,13 @@ int main(int argc, char* argv[])
 
     /* clean up opts. */
     dispose((disposable_t*)&opts);
+
+cleanup_rcpr_allocator:
+    release_retval = resource_release(rcpr_allocator_resource_handle(alloc));
+    if (STATUS_SUCCESS != release_retval)
+    {
+        retval = release_retval;
+    }
 
 cleanup_file:
     dispose((disposable_t*)&file);

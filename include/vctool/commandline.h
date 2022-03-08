@@ -3,12 +3,13 @@
  *
  * \brief Commandline parsing.
  *
- * \copyright 2020 Velo Payments.  See License.txt for license terms.
+ * \copyright 2020-2022 Velo Payments.  See License.txt for license terms.
  */
 
 #ifndef  VCTOOL_COMMANDLINE_HEADER_GUARD
 # define VCTOOL_COMMANDLINE_HEADER_GUARD
 
+#include <rcpr/allocator.h>
 #include <vccert/builder.h>
 #include <vccrypt/suite.h>
 #include <vctool/file.h>
@@ -58,6 +59,7 @@ struct command
  * \brief Parse command-line options, initializing a commandline_opts structure.
  *
  * \param opts          The commandline_opts structure to initialize.
+ * \param alloc         The RCPR allocator to use.
  * \param file          The file abstraction layer to use.
  * \param suite         The crypto suite to use.
  * \param builder_opts  The certificate builder options to use.
@@ -68,8 +70,9 @@ struct command
  *      - VCTOOL_STATUS_SUCCESS on success.
  */
 int commandline_opts_init(
-    commandline_opts* opts, file* file, vccrypt_suite_options_t* suite,
-    vccert_builder_options_t* builder_opts, int argc, char* argv[]);
+    commandline_opts* opts, RCPR_SYM(allocator)* alloc, file* file,
+    vccrypt_suite_options_t* suite, vccert_builder_options_t* builder_opts,
+    int argc, char* argv[]);
 
 /**
  * \brief Execute a command.

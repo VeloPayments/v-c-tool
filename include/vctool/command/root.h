@@ -3,12 +3,15 @@
  *
  * \brief Root command structure.
  *
- * \copyright 2020 Velo Payments.  See License.txt for license terms.
+ * \copyright 2020-2022 Velo Payments.  See License.txt for license terms.
  */
 
 #ifndef  VCTOOL_COMMAND_ROOT_HEADER_GUARD
 # define VCTOOL_COMMAND_ROOT_HEADER_GUARD
 
+#include <rcpr/allocator.h>
+#include <rcpr/rbtree.h>
+#include <rcpr/resource/protected.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <vctool/commandline.h>
@@ -29,18 +32,28 @@ typedef struct root_command
     char* output_filename;
     char* key_filename;
     unsigned int key_derivation_rounds;
+    RCPR_SYM(rbtree)* dict;
 } root_command;
+
+typedef struct root_dict_kvp
+{
+    RCPR_SYM(resource) hdr;
+    RCPR_SYM(allocator)* alloc;
+    char* key;
+    char* value;
+} root_dict_kvp;
 
 /**
  * \brief Initialize a root command structure.
  *
  * \param root          The root command structure to initialize.
+ * \param alloc         The RCPR allocator to use.
  *
  * \returns a status code indicating success or failure.
  *      - VCTOOL_STATUS_SUCCESS on success.
  *      - a non-zero error code on failure.
  */
-int root_command_init(root_command* root);
+int root_command_init(root_command* root, RCPR_SYM(allocator)* alloc);
 
 /**
  * \brief Dispatch root level commands.
