@@ -27,6 +27,7 @@ extern "C" {
 typedef struct root_command
 {
     command hdr;
+    RCPR_SYM(allocator)* alloc;
     bool help_requested;
     bool non_interactive;
     char* output_filename;
@@ -67,6 +68,19 @@ int root_command_init(root_command* root, RCPR_SYM(allocator)* alloc);
  *      - a non-zero error code on failure.
  */
 int dispatch_root_commands(commandline_opts* opts, int argc, char* argv[]);
+
+/**
+ * \brief Add a key-value pair in the form of a string of "key=value" to the
+ * root dictionary.
+ *
+ * \param root          The command-line root command.
+ * \param kvp           The key-value pair to add.
+ *
+ * \returns a status code indicating success or failure.
+ *      - VCTOOL_STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+int root_dict_add(root_command* root, const char* kvp);
 
 /* make this header C++ friendly. */
 #ifdef __cplusplus

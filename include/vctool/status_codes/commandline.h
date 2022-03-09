@@ -46,6 +46,18 @@ extern "C" {
 #define VCTOOL_ERROR_COMMANDLINE_BAD_KEY_ROUNDS \
     VCTOOL_STATUS_ERROR_MACRO(VCTOOL_COMPONENT_COMMANDLINE, 0x0005U)
 
+/**
+ * \brief Bad key-value pair.
+ */
+#define VCTOOL_ERROR_COMMANDLINE_BAD_KVP \
+    VCTOOL_STATUS_ERROR_MACRO(VCTOOL_COMPONENT_COMMANDLINE, 0x0006U)
+
+/**
+ * \brief Bad function parameter.
+ */
+#define VCTOOL_ERROR_COMMANDLINE_BAD_PARAMETER \
+    VCTOOL_STATUS_ERROR_MACRO(VCTOOL_COMPONENT_COMMANDLINE, 0x0007U)
+
 /* make this header C++ friendly. */
 #ifdef __cplusplus
 }

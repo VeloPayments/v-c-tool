@@ -46,6 +46,7 @@ int root_command_init(root_command* root, RCPR_SYM(allocator)* alloc)
     /* set root command values. */
     root->hdr.hdr.dispose = &dispose_root_command;
     root->key_derivation_rounds = ROOT_COMMAND_DEFAULT_KEY_DERIVATION_ROUNDS;
+    root->alloc = alloc;
 
     /* create the root dict rbtree. */
     retval =
