@@ -94,6 +94,12 @@ static void dispose_root_command(void* disp)
         free(root->key_filename);
     }
 
+    /* if the endorse config filename is set, then free it. */
+    if (NULL != root->endorse_config_filename)
+    {
+        free(root->endorse_config_filename);
+    }
+
     /* if the dict was created, then release it. */
     if (NULL != root->dict)
     {
