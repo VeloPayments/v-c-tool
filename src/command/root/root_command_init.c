@@ -76,6 +76,12 @@ static void dispose_root_command(void* disp)
 {
     root_command* root = (root_command*)disp;
 
+    /* if the input filename is set, then free it. */
+    if (NULL != root->input_filename)
+    {
+        free(root->input_filename);
+    }
+
     /* if the output filename is set, then free it. */
     if (NULL != root->output_filename)
     {
