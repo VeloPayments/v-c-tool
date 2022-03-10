@@ -75,7 +75,7 @@ int commandline_opts_init(
     opts->cmd = (command*)root;
 
     /* read through command-line options. */
-    while ((ch = getopt(argc, argv, "?D:NR:hk:o:i:")) != -1)
+    while ((ch = getopt(argc, argv, "?D:NR:hk:o:i:E:")) != -1)
     {
         switch (ch)
         {
@@ -116,6 +116,16 @@ int commandline_opts_init(
                     goto dispose_opts;
                 }
                 root->output_filename = strdup(optarg);
+                break;
+
+            case 'E':
+                if (NULL != root->endorse_config_filename)
+                {
+                    fprintf(stderr, "duplicate option -E %s\n", optarg);
+                    retval = VCTOOL_ERROR_COMMANDLINE_DUPLICATE_OPTION;
+                    goto dispose_opts;
+                }
+                root->endorse_config_filename = strdup(optarg);
                 break;
 
             case 'R':
