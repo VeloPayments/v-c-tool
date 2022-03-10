@@ -30,6 +30,7 @@ typedef struct root_command
     RCPR_SYM(allocator)* alloc;
     bool help_requested;
     bool non_interactive;
+    char* input_filename;
     char* output_filename;
     char* key_filename;
     unsigned int key_derivation_rounds;

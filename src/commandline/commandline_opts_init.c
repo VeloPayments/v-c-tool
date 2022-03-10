@@ -75,7 +75,7 @@ int commandline_opts_init(
     opts->cmd = (command*)root;
 
     /* read through command-line options. */
-    while ((ch = getopt(argc, argv, "?D:NR:hk:o:")) != -1)
+    while ((ch = getopt(argc, argv, "?D:NR:hk:o:i:")) != -1)
     {
         switch (ch)
         {
@@ -96,6 +96,16 @@ int commandline_opts_init(
 
             case 'N':
                 root->non_interactive = true;
+                break;
+
+            case 'i':
+                if (NULL != root->input_filename)
+                {
+                    fprintf(stderr, "duplicate option -i %s\n", optarg);
+                    retval = VCTOOL_ERROR_COMMANDLINE_DUPLICATE_OPTION;
+                    goto dispose_opts;
+                }
+                root->input_filename = strdup(optarg);
                 break;
 
             case 'o':
