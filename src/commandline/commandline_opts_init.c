@@ -75,7 +75,7 @@ int commandline_opts_init(
     opts->cmd = (command*)root;
 
     /* read through command-line options. */
-    while ((ch = getopt(argc, argv, "?NR:hk:o:")) != -1)
+    while ((ch = getopt(argc, argv, "?D:NR:hk:o:")) != -1)
     {
         switch (ch)
         {
@@ -117,6 +117,16 @@ int commandline_opts_init(
                     goto dispose_opts;
                 }
                 root->key_derivation_rounds = (unsigned int)rounds;
+                break;
+
+            case 'D':
+                if (STATUS_SUCCESS != root_dict_add(root, optarg))
+                {
+                    fprintf(
+                        stderr, "Could not add key-value pair %s.\n", optarg);
+                    retval = VCTOOL_ERROR_COMMANDLINE_BAD_KVP;
+                    goto dispose_opts;
+                }
                 break;
         }
     }
