@@ -15,6 +15,7 @@
 RCPR_IMPORT_compare;
 RCPR_IMPORT_rbtree;
 RCPR_IMPORT_resource;
+RCPR_IMPORT_slist;
 
 /* forward decls. */
 static void dispose_root_command(void* disp);
@@ -52,6 +53,13 @@ int root_command_init(root_command* root, RCPR_SYM(allocator)* alloc)
     retval =
         rbtree_create(
             &root->dict, alloc, &root_dict_compare, &root_dict_key, NULL);
+    if (STATUS_SUCCESS != retval)
+    {
+        goto cleanup_root;
+    }
+
+    /* create the root permissions list. */
+    retval = slist_create(&root->permissions, alloc);
     if (STATUS_SUCCESS != retval)
     {
         goto cleanup_root;
@@ -104,6 +112,12 @@ static void dispose_root_command(void* disp)
     if (NULL != root->dict)
     {
         (void)resource_release(rbtree_resource_handle(root->dict));
+    }
+
+    /* if the permissions list was created, then release it. */
+    if (NULL != root->permissions)
+    {
+        (void)resource_release(slist_resource_handle(root->permissions));
     }
 }
 
