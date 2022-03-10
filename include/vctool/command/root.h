@@ -12,6 +12,7 @@
 #include <rcpr/allocator.h>
 #include <rcpr/rbtree.h>
 #include <rcpr/resource/protected.h>
+#include <rcpr/slist.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <vctool/commandline.h>
@@ -36,6 +37,7 @@ typedef struct root_command
     char* key_filename;
     unsigned int key_derivation_rounds;
     RCPR_SYM(rbtree)* dict;
+    RCPR_SYM(slist)* permissions;
 } root_command;
 
 typedef struct root_dict_kvp
@@ -45,6 +47,14 @@ typedef struct root_dict_kvp
     char* key;
     char* value;
 } root_dict_kvp;
+
+typedef struct root_permission
+{
+    RCPR_SYM(resource) hdr;
+    RCPR_SYM(allocator)* alloc;
+    char* entity;
+    char* moiety;
+} root_permission;
 
 /**
  * \brief Initialize a root command structure.
