@@ -75,7 +75,7 @@ int commandline_opts_init(
     opts->cmd = (command*)root;
 
     /* read through command-line options. */
-    while ((ch = getopt(argc, argv, "?D:NR:hk:o:i:E:")) != -1)
+    while ((ch = getopt(argc, argv, "?D:NR:hk:o:i:E:P:")) != -1)
     {
         switch (ch)
         {
@@ -145,6 +145,15 @@ int commandline_opts_init(
                     fprintf(
                         stderr, "Could not add key-value pair %s.\n", optarg);
                     retval = VCTOOL_ERROR_COMMANDLINE_BAD_KVP;
+                    goto dispose_opts;
+                }
+                break;
+
+            case 'P':
+                if (STATUS_SUCCESS != root_permission_add(root, optarg))
+                {
+                    fprintf(stderr, "Could not add permission %s.\n", optarg);
+                    retval = VCTOOL_ERROR_COMMANDLINE_BAD_PERMISSION;
                     goto dispose_opts;
                 }
                 break;
