@@ -94,6 +94,19 @@ int dispatch_root_commands(commandline_opts* opts, int argc, char* argv[]);
  */
 int root_dict_add(root_command* root, const char* kvp);
 
+/**
+ * \brief Add a permission in the form of "entity:moiety" to the permission
+ * list.
+ *
+ * \param root          The command-line root command.
+ * \param perm          The permission to add.
+ *
+ * \returns a status code indicating success or failure.
+ *      - VCTOOL_STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+int root_permission_add(root_command* root, const char* perm);
+
 /* make this header C++ friendly. */
 #ifdef __cplusplus
 }
