@@ -1959,7 +1959,7 @@ TEST(E_argument_multiple)
     dispose((disposable_t*)&alloc_opts);
 }
 
-/* a permession is added to the permissions list with the -P option. */
+/* a permission is added to the permissions list with the -P option. */
 TEST(P_argument)
 {
     allocator_options_t alloc_opts;
@@ -2060,6 +2060,500 @@ TEST(P_argument)
     TEST_EXPECT(!strcmp("foo", foo_entry->entity));
     /* moiety is bar. */
     TEST_EXPECT(!strcmp("bar", foo_entry->moiety));
+
+    /* clean up. */
+    dispose((disposable_t*)&opts);
+    dispose((disposable_t*)&builder_opts);
+    dispose((disposable_t*)&suite);
+    dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+    dispose((disposable_t*)&alloc_opts);
+}
+
+/* Multiple permissions can be added. */
+TEST(P_argument_multi)
+{
+    allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
+    vccrypt_suite_options_t suite;
+    file f;
+    vccert_builder_options_t builder_opts;
+    string exe_name = "vctool";
+    string P_argument1 = "-Pfoo:bar";
+    string P_argument2 = "-Pabc:def";
+    string P_argument3 = "-Pghi:jkl";
+    string help_argument = "help";
+    char* argv[] = {
+        (char*)exe_name.c_str(), (char*)P_argument1.c_str(),
+        (char*)P_argument2.c_str(), (char*)P_argument3.c_str(),
+        (char*)help_argument.c_str() };
+    int argc = sizeof(argv) / sizeof(char*);
+    commandline_opts opts;
+    resource* val;
+
+    /* register the mock crypto suite. */
+    vccrypt_suite_register_mock();
+
+    /* create malloc allocator. */
+    malloc_allocator_options_init(&alloc_opts);
+
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    /* create the mock file. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS ==
+            file_mock_init(
+                &f,
+                /* stat. */
+                [&](file*, const char*, file_stat_st*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* open. */
+                [&](file*, int*, const char*, int, mode_t) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* close. */
+                [&](file*, int) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* read. */
+                [&](file*, int, void*, size_t, size_t*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* write. */
+                [&](
+                    file*, int, const void*, size_t, size_t*) -> int {
+                        return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* lseek. */
+                [&](file*, int, off_t, file_lseek_whence, off_t*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                [&](file*, int) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                }));
+
+    /* create a mock crypto suite. */
+    TEST_ASSERT(
+        VCCRYPT_STATUS_SUCCESS ==
+        vccrypt_mock_suite_options_init(
+            &suite, &alloc_opts));
+
+    /* create a builder options instance. */
+    TEST_ASSERT(
+        VCCRYPT_STATUS_SUCCESS ==
+            vccert_builder_options_init(
+                &builder_opts, &alloc_opts, &suite));
+
+    /* calling commandline_opts_init should succeed. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS ==
+            commandline_opts_init(
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
+
+    /* the help command is set. */
+    TEST_ASSERT(NULL != opts.cmd);
+
+    /* get the root command. */
+    command* cmd = opts.cmd;
+    while (cmd->next != NULL) cmd = cmd->next;
+    root_command* root = (root_command*)cmd;
+
+    /* the root permissions list has three entries. */
+    TEST_ASSERT(NULL != root->permissions);
+    TEST_EXPECT(3 == slist_count(root->permissions));
+
+    /* We can retrieve the first entry. */
+    slist_node* node = NULL;
+    TEST_ASSERT(STATUS_SUCCESS == slist_head(&node, root->permissions));
+    TEST_ASSERT(node != NULL);
+    TEST_ASSERT(STATUS_SUCCESS == slist_node_child(&val, node));
+    root_permission* foo_entry = (root_permission*)val;
+    /* entity is foo. */
+    TEST_EXPECT(!strcmp("foo", foo_entry->entity));
+    /* moiety is bar. */
+    TEST_EXPECT(!strcmp("bar", foo_entry->moiety));
+
+    /* We can retrieve the second entry. */
+    slist_node* next = NULL;
+    TEST_ASSERT(STATUS_SUCCESS == slist_node_next(&next, node));
+    TEST_ASSERT(next != NULL);
+    TEST_ASSERT(STATUS_SUCCESS == slist_node_child(&val, next));
+    root_permission* abc_entry = (root_permission*)val;
+    /* entity is foo. */
+    TEST_EXPECT(!strcmp("abc", abc_entry->entity));
+    /* moiety is bar. */
+    TEST_EXPECT(!strcmp("def", abc_entry->moiety));
+
+    /* We can retrieve the third entry. */
+    node = next;
+    TEST_ASSERT(STATUS_SUCCESS == slist_node_next(&next, node));
+    TEST_ASSERT(next != NULL);
+    TEST_ASSERT(STATUS_SUCCESS == slist_node_child(&val, next));
+    root_permission* ghi_entry = (root_permission*)val;
+    /* entity is foo. */
+    TEST_EXPECT(!strcmp("ghi", ghi_entry->entity));
+    /* moiety is bar. */
+    TEST_EXPECT(!strcmp("jkl", ghi_entry->moiety));
+
+    /* clean up. */
+    dispose((disposable_t*)&opts);
+    dispose((disposable_t*)&builder_opts);
+    dispose((disposable_t*)&suite);
+    dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+    dispose((disposable_t*)&alloc_opts);
+}
+
+/* invalid permissions cause a failure. */
+TEST(P_argument_bad)
+{
+    allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
+    vccrypt_suite_options_t suite;
+    file f;
+    vccert_builder_options_t builder_opts;
+    string exe_name = "vctool";
+    string P_argument1 = "-Pfoobar";
+    string help_argument = "help";
+    char* argv[] = {
+        (char*)exe_name.c_str(), (char*)P_argument1.c_str(),
+        (char*)help_argument.c_str() };
+    int argc = sizeof(argv) / sizeof(char*);
+    commandline_opts opts;
+
+    /* register the mock crypto suite. */
+    vccrypt_suite_register_mock();
+
+    /* create malloc allocator. */
+    malloc_allocator_options_init(&alloc_opts);
+
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    /* create the mock file. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS ==
+            file_mock_init(
+                &f,
+                /* stat. */
+                [&](file*, const char*, file_stat_st*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* open. */
+                [&](file*, int*, const char*, int, mode_t) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* close. */
+                [&](file*, int) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* read. */
+                [&](file*, int, void*, size_t, size_t*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* write. */
+                [&](
+                    file*, int, const void*, size_t, size_t*) -> int {
+                        return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* lseek. */
+                [&](file*, int, off_t, file_lseek_whence, off_t*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                [&](file*, int) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                }));
+
+    /* create a mock crypto suite. */
+    TEST_ASSERT(
+        VCCRYPT_STATUS_SUCCESS ==
+        vccrypt_mock_suite_options_init(
+            &suite, &alloc_opts));
+
+    /* create a builder options instance. */
+    TEST_ASSERT(
+        VCCRYPT_STATUS_SUCCESS ==
+            vccert_builder_options_init(
+                &builder_opts, &alloc_opts, &suite));
+
+    /* calling commandline_opts_init should fail. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS !=
+            commandline_opts_init(
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
+
+    /* clean up. */
+    dispose((disposable_t*)&opts);
+    dispose((disposable_t*)&builder_opts);
+    dispose((disposable_t*)&suite);
+    dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+    dispose((disposable_t*)&alloc_opts);
+}
+
+/* a permission without an entity is invalid. */
+TEST(P_argument_missing_entity)
+{
+    allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
+    vccrypt_suite_options_t suite;
+    file f;
+    vccert_builder_options_t builder_opts;
+    string exe_name = "vctool";
+    string P_argument1 = "-P:bar";
+    string help_argument = "help";
+    char* argv[] = {
+        (char*)exe_name.c_str(), (char*)P_argument1.c_str(),
+        (char*)help_argument.c_str() };
+    int argc = sizeof(argv) / sizeof(char*);
+    commandline_opts opts;
+
+    /* register the mock crypto suite. */
+    vccrypt_suite_register_mock();
+
+    /* create malloc allocator. */
+    malloc_allocator_options_init(&alloc_opts);
+
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    /* create the mock file. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS ==
+            file_mock_init(
+                &f,
+                /* stat. */
+                [&](file*, const char*, file_stat_st*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* open. */
+                [&](file*, int*, const char*, int, mode_t) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* close. */
+                [&](file*, int) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* read. */
+                [&](file*, int, void*, size_t, size_t*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* write. */
+                [&](
+                    file*, int, const void*, size_t, size_t*) -> int {
+                        return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* lseek. */
+                [&](file*, int, off_t, file_lseek_whence, off_t*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                [&](file*, int) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                }));
+
+    /* create a mock crypto suite. */
+    TEST_ASSERT(
+        VCCRYPT_STATUS_SUCCESS ==
+        vccrypt_mock_suite_options_init(
+            &suite, &alloc_opts));
+
+    /* create a builder options instance. */
+    TEST_ASSERT(
+        VCCRYPT_STATUS_SUCCESS ==
+            vccert_builder_options_init(
+                &builder_opts, &alloc_opts, &suite));
+
+    /* calling commandline_opts_init should fail. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS !=
+            commandline_opts_init(
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
+
+    /* clean up. */
+    dispose((disposable_t*)&opts);
+    dispose((disposable_t*)&builder_opts);
+    dispose((disposable_t*)&suite);
+    dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+    dispose((disposable_t*)&alloc_opts);
+}
+
+/* a permission without a moiety is invalid. */
+TEST(P_argument_missing_moiety)
+{
+    allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
+    vccrypt_suite_options_t suite;
+    file f;
+    vccert_builder_options_t builder_opts;
+    string exe_name = "vctool";
+    string P_argument1 = "-Pfoo:";
+    string help_argument = "help";
+    char* argv[] = {
+        (char*)exe_name.c_str(), (char*)P_argument1.c_str(),
+        (char*)help_argument.c_str() };
+    int argc = sizeof(argv) / sizeof(char*);
+    commandline_opts opts;
+
+    /* register the mock crypto suite. */
+    vccrypt_suite_register_mock();
+
+    /* create malloc allocator. */
+    malloc_allocator_options_init(&alloc_opts);
+
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    /* create the mock file. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS ==
+            file_mock_init(
+                &f,
+                /* stat. */
+                [&](file*, const char*, file_stat_st*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* open. */
+                [&](file*, int*, const char*, int, mode_t) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* close. */
+                [&](file*, int) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* read. */
+                [&](file*, int, void*, size_t, size_t*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* write. */
+                [&](
+                    file*, int, const void*, size_t, size_t*) -> int {
+                        return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* lseek. */
+                [&](file*, int, off_t, file_lseek_whence, off_t*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                [&](file*, int) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                }));
+
+    /* create a mock crypto suite. */
+    TEST_ASSERT(
+        VCCRYPT_STATUS_SUCCESS ==
+        vccrypt_mock_suite_options_init(
+            &suite, &alloc_opts));
+
+    /* create a builder options instance. */
+    TEST_ASSERT(
+        VCCRYPT_STATUS_SUCCESS ==
+            vccert_builder_options_init(
+                &builder_opts, &alloc_opts, &suite));
+
+    /* calling commandline_opts_init should fail. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS !=
+            commandline_opts_init(
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
+
+    /* clean up. */
+    dispose((disposable_t*)&opts);
+    dispose((disposable_t*)&builder_opts);
+    dispose((disposable_t*)&suite);
+    dispose((disposable_t*)&f);
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            resource_release(rcpr_allocator_resource_handle(alloc)));
+    dispose((disposable_t*)&alloc_opts);
+}
+
+/* a permission without an entity or moiety is invalid. */
+TEST(P_argument_missing_entity_and_moiety)
+{
+    allocator_options_t alloc_opts;
+    rcpr_allocator* alloc;
+    vccrypt_suite_options_t suite;
+    file f;
+    vccert_builder_options_t builder_opts;
+    string exe_name = "vctool";
+    string P_argument1 = "-P:";
+    string help_argument = "help";
+    char* argv[] = {
+        (char*)exe_name.c_str(), (char*)P_argument1.c_str(),
+        (char*)help_argument.c_str() };
+    int argc = sizeof(argv) / sizeof(char*);
+    commandline_opts opts;
+
+    /* register the mock crypto suite. */
+    vccrypt_suite_register_mock();
+
+    /* create malloc allocator. */
+    malloc_allocator_options_init(&alloc_opts);
+
+    /* create RCPR allocator. */
+    TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
+
+    /* create the mock file. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS ==
+            file_mock_init(
+                &f,
+                /* stat. */
+                [&](file*, const char*, file_stat_st*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* open. */
+                [&](file*, int*, const char*, int, mode_t) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* close. */
+                [&](file*, int) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* read. */
+                [&](file*, int, void*, size_t, size_t*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* write. */
+                [&](
+                    file*, int, const void*, size_t, size_t*) -> int {
+                        return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                /* lseek. */
+                [&](file*, int, off_t, file_lseek_whence, off_t*) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                },
+                [&](file*, int) -> int {
+                    return VCTOOL_ERROR_FILE_BAD_DESCRIPTOR;
+                }));
+
+    /* create a mock crypto suite. */
+    TEST_ASSERT(
+        VCCRYPT_STATUS_SUCCESS ==
+        vccrypt_mock_suite_options_init(
+            &suite, &alloc_opts));
+
+    /* create a builder options instance. */
+    TEST_ASSERT(
+        VCCRYPT_STATUS_SUCCESS ==
+            vccert_builder_options_init(
+                &builder_opts, &alloc_opts, &suite));
+
+    /* calling commandline_opts_init should fail. */
+    TEST_ASSERT(
+        VCTOOL_STATUS_SUCCESS !=
+            commandline_opts_init(
+                &opts, alloc, &f, &suite, &builder_opts, argc, argv));
 
     /* clean up. */
     dispose((disposable_t*)&opts);
