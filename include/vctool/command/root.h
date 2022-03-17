@@ -31,6 +31,7 @@ typedef struct root_command
     RCPR_SYM(allocator)* alloc;
     bool help_requested;
     bool non_interactive;
+    bool verbose;
     char* input_filename;
     char* output_filename;
     char* endorse_config_filename;
