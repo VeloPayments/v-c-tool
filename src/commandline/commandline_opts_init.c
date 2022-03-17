@@ -75,13 +75,17 @@ int commandline_opts_init(
     opts->cmd = (command*)root;
 
     /* read through command-line options. */
-    while ((ch = getopt(argc, argv, "?D:NR:hk:o:i:E:P:")) != -1)
+    while ((ch = getopt(argc, argv, "?D:NR:hk:o:i:E:P:v")) != -1)
     {
         switch (ch)
         {
             case '?':
             case 'h':
                 root->help_requested = true;
+                break;
+
+            case 'v':
+                root->verbose = true;
                 break;
 
             case 'k':
