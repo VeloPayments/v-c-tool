@@ -26,7 +26,8 @@ static status certfile_resource_release(resource* r);
  * \param size      The size of the certificate file.
  */
 status certfile_create(
-    certfile** cert, RCPR_SYM(allocator)* alloc, char* filename, size_t size)
+    certfile** cert, RCPR_SYM(allocator)* alloc, const char* filename,
+    size_t size)
 {
     status retval, release_retval;
     certfile* tmp;
