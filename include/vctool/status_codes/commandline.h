@@ -64,6 +64,12 @@ extern "C" {
 #define VCTOOL_ERROR_COMMANDLINE_BAD_PERMISSION \
     VCTOOL_STATUS_ERROR_MACRO(VCTOOL_COMPONENT_COMMANDLINE, 0x0008U)
 
+/**
+ * \brief Bad file permissions.
+ */
+#define VCTOOL_ERROR_COMMANDLINE_BAD_FILE_PERMISSIONS \
+    VCTOOL_STATUS_ERROR_MACRO(VCTOOL_COMPONENT_COMMANDLINE, 0x0009U)
+
 /* make this header C++ friendly. */
 #ifdef __cplusplus
 }
