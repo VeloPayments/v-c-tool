@@ -32,4 +32,5 @@ typedef struct certfile
  * \param size      The size of the certificate file.
  */
 status certfile_create(
-    certfile** cert, RCPR_SYM(allocator)* alloc, char* filename, size_t size);
+    certfile** cert, RCPR_SYM(allocator)* alloc, const char* filename,
+    size_t size);
