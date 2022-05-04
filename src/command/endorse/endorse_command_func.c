@@ -29,6 +29,8 @@ static status get_input_file(
 static status get_output_filename(
     char** output_filename, const char* input_filename,
     const root_command* root);
+static status read_key_certificate(
+    vccrypt_buffer_t** cert, commandline_opts* opts, const certfile* key_file);
 
 /**
  * \brief Execute the endorse command.
@@ -45,6 +47,7 @@ int endorse_command_func(commandline_opts* opts)
     certfile* key_file;
     certfile* input_file;
     char* output_filename;
+    vccrypt_buffer_t* key_cert;
 
     /* parameter sanity checks. */
     MODEL_ASSERT(PROP_VALID_COMMANDLINE_OPTS(opts));
@@ -68,6 +71,10 @@ int endorse_command_func(commandline_opts* opts)
         cleanup_input_file);
 
     /* Verify that the endorser private key is valid and read it. */
+    TRY_OR_FAIL(
+        read_key_certificate(&key_cert, opts, key_file),
+        cleanup_output_filename);
+
     /* Verify that the input public key file is valid and read it. */
     /* Verify that the output file won't clobber an existing file. */
     /* Read / parse the endorse config file. */
@@ -91,7 +98,10 @@ int endorse_command_func(commandline_opts* opts)
 
     fprintf(stderr, "endorse not yet implemented.\n");
 
-    goto cleanup_output_filename;
+    goto cleanup_key_cert;
+
+cleanup_key_cert:
+    dispose(vccrypt_buffer_disposable_handle(key_cert));
 
 cleanup_output_filename:
     free(output_filename);
@@ -244,4 +254,17 @@ static status get_output_filename(
 
         return STATUS_SUCCESS;
     }
+}
+
+/**
+ * \brief Read the key certificate file.
+ */
+static status read_key_certificate(
+    vccrypt_buffer_t** cert, commandline_opts* opts, const certfile* key_file)
+{
+    (void)cert;
+    (void)opts;
+    (void)key_file;
+
+    return -1;
 }
