@@ -10,9 +10,12 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <vccrypt/compare.h>
+#include <vctool/certificate.h>
 #include <vctool/command/endorse.h>
 #include <vctool/command/root.h>
 #include <vctool/control.h>
+#include <vctool/readpassword.h>
 
 #include "certfile.h"
 
@@ -30,7 +33,10 @@ static status get_output_filename(
     char** output_filename, const char* input_filename,
     const root_command* root);
 static status read_key_certificate(
-    vccrypt_buffer_t** cert, commandline_opts* opts, const certfile* key_file);
+    vccrypt_buffer_t* cert, commandline_opts* opts, const certfile* key_file);
+static status read_password_and_decrypt_certfile(
+    vccrypt_buffer_t* decrypted_cert, commandline_opts* opts,
+    const vccrypt_buffer_t* encrypted_cert);
 
 /**
  * \brief Execute the endorse command.
@@ -47,7 +53,7 @@ int endorse_command_func(commandline_opts* opts)
     certfile* key_file;
     certfile* input_file;
     char* output_filename;
-    vccrypt_buffer_t* key_cert;
+    vccrypt_buffer_t key_cert;
 
     /* parameter sanity checks. */
     MODEL_ASSERT(PROP_VALID_COMMANDLINE_OPTS(opts));
@@ -101,7 +107,7 @@ int endorse_command_func(commandline_opts* opts)
     goto cleanup_key_cert;
 
 cleanup_key_cert:
-    dispose(vccrypt_buffer_disposable_handle(key_cert));
+    dispose(vccrypt_buffer_disposable_handle(&key_cert));
 
 cleanup_output_filename:
     free(output_filename);
@@ -260,11 +266,121 @@ static status get_output_filename(
  * \brief Read the key certificate file.
  */
 static status read_key_certificate(
-    vccrypt_buffer_t** cert, commandline_opts* opts, const certfile* key_file)
+    vccrypt_buffer_t* cert, commandline_opts* opts, const certfile* key_file)
 {
-    (void)cert;
-    (void)opts;
-    (void)key_file;
+    status retval;
+    int fd;
+    vccrypt_buffer_t tmp;
+    bool save_cert = false;
 
-    return -1;
+    /* create the certificate buffer. */
+    retval = vccrypt_buffer_init(cert, opts->suite->alloc_opts, key_file->size);
+    if (STATUS_SUCCESS != retval)
+    {
+        fprintf(stderr, "Out of memory.\n");
+        goto done;
+    }
+
+    /* open the file. */
+    retval =
+        file_open(
+            opts->file, &fd, key_file->filename, O_RDONLY, 0);
+    if (STATUS_SUCCESS != retval)
+    {
+        fprintf(
+            stderr, "Error opening file %s for read.\n", key_file->filename);
+        goto cleanup_cert;
+    }
+
+    /* read the contents into the certificate buffer. */
+    size_t read_bytes;
+    retval = file_read(opts->file, fd, cert->data, cert->size, &read_bytes);
+    if (STATUS_SUCCESS != retval || read_bytes != cert->size)
+    {
+        fprintf(stderr, "Error reading from %s.\n", key_file->filename);
+        goto cleanup_file;
+    }
+
+    /* Does it have encryption magic? */
+    if (cert->size > ENCRYPTED_CERT_MAGIC_SIZE
+     && !crypto_memcmp(
+            cert->data, ENCRYPTED_CERT_MAGIC_STRING, ENCRYPTED_CERT_MAGIC_SIZE))
+    {
+        /* Yes: read password and decrypt file. */
+        retval = read_password_and_decrypt_certfile(&tmp, opts, cert);
+        if (STATUS_SUCCESS != retval)
+        {
+            goto cleanup_file;
+        }
+
+        /* dispose of the encrypted certificate. */
+        dispose(vccrypt_buffer_disposable_handle(cert));
+
+        /* move the decrypted certificate to the certificate buffer. */
+        vccrypt_buffer_move(cert, &tmp);
+    }
+
+    /* success. Instruct our cleanup logic to save the certificate. */
+    save_cert = true;
+    retval = STATUS_SUCCESS;
+    goto cleanup_file;
+
+cleanup_file:
+    file_close(opts->file, fd);
+
+cleanup_cert:
+    /* dispose of the certificate unless we are saving it for the caller. */
+    if (!save_cert)
+    {
+        dispose(vccrypt_buffer_disposable_handle(cert));
+    }
+
+done:
+    return retval;
+}
+
+/**
+ * \brief Read a password from the user and use it to decrypt the certificate
+ * file.
+ */
+static status read_password_and_decrypt_certfile(
+    vccrypt_buffer_t* decrypted_cert, commandline_opts* opts,
+    const vccrypt_buffer_t* encrypted_cert)
+{
+    status retval;
+    vccrypt_buffer_t password_buffer;
+    vccrypt_buffer_t* tmp;
+
+    /* Read the passphrase. */
+    printf("Enter passphrase: ");
+    fflush(stdout);
+    retval = readpassword(opts->suite, &password_buffer);
+    if (STATUS_SUCCESS != retval)
+    {
+        fprintf(stderr, "Failure.\n");
+        goto done;
+    }
+    printf("\n");
+
+    /* decrypt the certificate. */
+    retval =
+        certificate_decrypt(
+            opts->suite, &tmp, encrypted_cert, &password_buffer);
+    if (STATUS_SUCCESS != retval)
+    {
+        fprintf(stderr, "Error decrypting key file.\n");
+        goto cleanup_passphrase;
+    }
+
+    /* success. */
+    vccrypt_buffer_move(decrypted_cert, tmp);
+    free(tmp);
+    retval = STATUS_SUCCESS;
+    goto cleanup_passphrase;
+
+cleanup_passphrase:
+    dispose(vccrypt_buffer_disposable_handle(&password_buffer));
+
+done:
+    return retval;
 }
