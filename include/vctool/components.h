@@ -48,6 +48,11 @@ enum vctool_components
      * \brief backup Component.
      */
     VCTOOL_COMPONENT_BACKUP = 0x05U,
+
+    /**
+     * \brief endorse Component.
+     */
+    VCTOOL_COMPONENT_ENDORSE = 0x06U,
 };
 
 /* make this header C++ friendly. */
