@@ -30,7 +30,7 @@ static status get_input_file(
     certfile** input_file, commandline_opts* opts, rcpr_allocator* alloc,
     const root_command* root);
 static status get_output_filename(
-    char** output_filename, const char* input_filename,
+    char** output_filename, commandline_opts* opts, const char* input_filename,
     const root_command* root);
 static status read_key_certificate(
     vccrypt_buffer_t* cert, commandline_opts* opts, const certfile* key_file);
@@ -76,7 +76,7 @@ int endorse_command_func(commandline_opts* opts)
 
     /* get the output filename. */
     TRY_OR_FAIL(
-        get_output_filename(&output_filename, input_file->filename, root),
+        get_output_filename(&output_filename, opts, input_file->filename, root),
         cleanup_input_file);
 
     /* Verify that the endorser private key is valid and read it. */
@@ -89,7 +89,6 @@ int endorse_command_func(commandline_opts* opts)
         read_input_certificate(&input_cert, opts, input_file),
         cleanup_key_cert);
 
-    /* Verify that the output file won't clobber an existing file. */
     /* Read / parse the endorse config file. */
     /* For each dictionary definition: */
         /* Verify that the definition is an entity in the config. */
@@ -235,41 +234,64 @@ done:
 }
 
 /**
- * \brief Key the output filename and output an error message if unset.
+ * \brief Compute the output filename and output an error message if unset.
  */
 static status get_output_filename(
-    char** output_filename, const char* input_filename,
+    char** output_filename, commandline_opts* opts, const char* input_filename,
     const root_command* root)
 {
+    status retval;
+
+    /* if the output file is set, use it. */
     if (NULL != root->output_filename)
     {
         *output_filename = strdup(root->output_filename);
-        return STATUS_SUCCESS;
+        retval = STATUS_SUCCESS;
+        goto done;
     }
-    else
+
+    /* compute the filename length. */
+    size_t output_filename_length =
+        strlen(input_filename)
+      + 9 /* .endorsed */
+      + 1;/* asciiz */
+
+    /* allocate memory for the filename. */
+    *output_filename = (char*)malloc(output_filename_length);
+    if (NULL == *output_filename)
     {
-        /* compute the filename length. */
-        size_t output_filename_length =
-            strlen(input_filename)
-          + 9 /* .endorsed */
-          + 1;/* asciiz */
-
-        /* allocate memory for the filename. */
-        *output_filename = (char*)malloc(output_filename_length);
-        if (NULL == *output_filename)
-        {
-            fprintf(stderr, "Out of memory.\n");
-            return VCTOOL_ERROR_GENERAL_OUT_OF_MEMORY;
-        }
-
-        /* create the output filename. */
-        memset(*output_filename, 0, output_filename_length);
-        snprintf(
-            *output_filename, output_filename_length, "%s.endorsed",
-            input_filename);
-
-        return STATUS_SUCCESS;
+        fprintf(stderr, "Out of memory.\n");
+        retval = VCTOOL_ERROR_GENERAL_OUT_OF_MEMORY;
+        goto done;
     }
+
+    /* create the output filename. */
+    memset(*output_filename, 0, output_filename_length);
+    snprintf(
+        *output_filename, output_filename_length, "%s.endorsed",
+        input_filename);
+
+    /* stat the output file to ensure it does not exist. */
+    file_stat_st fst;
+    retval = file_stat(opts->file, *output_filename, &fst);
+    if (VCTOOL_ERROR_FILE_NO_ENTRY != retval)
+    {
+        fprintf(
+            stderr, "Won't clobber existing file %s.  Stopping.\n",
+            *output_filename);
+        retval = VCTOOL_ERROR_ENDORSE_WOULD_CLOBBER_FILE;
+        goto cleanup_output_filename;
+    }
+
+    /* success. */
+    retval = STATUS_SUCCESS;
+    goto done;
+
+cleanup_output_filename:
+    free(*output_filename);
+
+done:
+    return retval;
 }
 
 /**
