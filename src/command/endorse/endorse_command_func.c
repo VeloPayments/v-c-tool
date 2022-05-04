@@ -37,6 +37,8 @@ static status read_key_certificate(
 static status read_password_and_decrypt_certfile(
     vccrypt_buffer_t* decrypted_cert, commandline_opts* opts,
     const vccrypt_buffer_t* encrypted_cert);
+static status read_input_certificate(
+    vccrypt_buffer_t* cert, commandline_opts* opts, const certfile* input_file);
 
 /**
  * \brief Execute the endorse command.
@@ -54,6 +56,7 @@ int endorse_command_func(commandline_opts* opts)
     certfile* input_file;
     char* output_filename;
     vccrypt_buffer_t key_cert;
+    vccrypt_buffer_t input_cert;
 
     /* parameter sanity checks. */
     MODEL_ASSERT(PROP_VALID_COMMANDLINE_OPTS(opts));
@@ -82,6 +85,10 @@ int endorse_command_func(commandline_opts* opts)
         cleanup_output_filename);
 
     /* Verify that the input public key file is valid and read it. */
+    TRY_OR_FAIL(
+        read_input_certificate(&input_cert, opts, input_file),
+        cleanup_key_cert);
+
     /* Verify that the output file won't clobber an existing file. */
     /* Read / parse the endorse config file. */
     /* For each dictionary definition: */
@@ -104,7 +111,10 @@ int endorse_command_func(commandline_opts* opts)
 
     fprintf(stderr, "endorse not yet implemented.\n");
 
-    goto cleanup_key_cert;
+    goto cleanup_input_cert;
+
+cleanup_input_cert:
+    dispose(vccrypt_buffer_disposable_handle(&input_cert));
 
 cleanup_key_cert:
     dispose(vccrypt_buffer_disposable_handle(&key_cert));
@@ -268,7 +278,7 @@ static status get_output_filename(
 static status read_key_certificate(
     vccrypt_buffer_t* cert, commandline_opts* opts, const certfile* key_file)
 {
-    status retval;
+    status retval, release_retval;
     int fd;
     vccrypt_buffer_t tmp;
     bool save_cert = false;
@@ -326,11 +336,15 @@ static status read_key_certificate(
     goto cleanup_file;
 
 cleanup_file:
-    file_close(opts->file, fd);
+    release_retval = file_close(opts->file, fd);
+    if (STATUS_SUCCESS != release_retval)
+    {
+        retval = release_retval;
+    }
 
 cleanup_cert:
     /* dispose of the certificate unless we are saving it for the caller. */
-    if (!save_cert)
+    if (retval != STATUS_SUCCESS || !save_cert)
     {
         dispose(vccrypt_buffer_disposable_handle(cert));
     }
@@ -380,6 +394,68 @@ static status read_password_and_decrypt_certfile(
 
 cleanup_passphrase:
     dispose(vccrypt_buffer_disposable_handle(&password_buffer));
+
+done:
+    return retval;
+}
+
+/**
+ * \brief Read the input file.
+ */
+static status read_input_certificate(
+    vccrypt_buffer_t* cert, commandline_opts* opts, const certfile* input_file)
+{
+    status retval, release_retval;
+    int fd;
+    bool save_cert = false;
+
+    /* create the certificate buffer. */
+    retval =
+        vccrypt_buffer_init(cert, opts->suite->alloc_opts, input_file->size);
+    if (STATUS_SUCCESS != retval)
+    {
+        fprintf(stderr, "Out of memory.\n");
+        goto done;
+    }
+
+    /* open the file. */
+    retval =
+        file_open(
+            opts->file, &fd, input_file->filename, O_RDONLY, 0);
+    if (STATUS_SUCCESS != retval)
+    {
+        fprintf(
+            stderr, "Error opening file %s for read.\n", input_file->filename);
+        goto cleanup_cert;
+    }
+
+    /* read the contents into the certificate buffer. */
+    size_t read_bytes;
+    retval = file_read(opts->file, fd, cert->data, cert->size, &read_bytes);
+    if (STATUS_SUCCESS != retval || read_bytes != cert->size)
+    {
+        fprintf(stderr, "Error reading from %s.\n", input_file->filename);
+        goto cleanup_file;
+    }
+
+    /* success. Instruct our cleanup logic to save the certificate. */
+    save_cert = true;
+    retval = STATUS_SUCCESS;
+    goto cleanup_file;
+
+cleanup_file:
+    release_retval = file_close(opts->file, fd);
+    if (STATUS_SUCCESS != release_retval)
+    {
+        retval = release_retval;
+    }
+
+cleanup_cert:
+    /* dispose of the certificate unless we are saving it for the caller. */
+    if (retval != STATUS_SUCCESS || !save_cert)
+    {
+        dispose(vccrypt_buffer_disposable_handle(cert));
+    }
 
 done:
     return retval;
