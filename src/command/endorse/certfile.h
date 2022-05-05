@@ -12,6 +12,11 @@
 #include <rcpr/resource/protected.h>
 #include <rcpr/status.h>
 
+/* make this header C++ friendly. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * \brief Certificate file resource.
  */
@@ -34,3 +39,8 @@ typedef struct certfile
 status certfile_create(
     certfile** cert, RCPR_SYM(allocator)* alloc, const char* filename,
     size_t size);
+
+/* make this header C++ friendly. */
+#ifdef __cplusplus
+}
+#endif

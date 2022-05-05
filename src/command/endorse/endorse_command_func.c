@@ -6,26 +6,12 @@
  * \copyright 2022 Velo Payments.  See License.txt for license terms.
  */
 
-#include <cbmc/model_assert.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <string.h>
-#include <vccrypt/compare.h>
-#include <vctool/certificate.h>
-#include <vctool/command/endorse.h>
-#include <vctool/command/root.h>
-#include <vctool/control.h>
-#include <vctool/readpassword.h>
-
-#include "certfile.h"
+#include "endorse_internal.h"
 
 RCPR_IMPORT_allocator_as(rcpr);
 RCPR_IMPORT_resource;
 
 /* forward decls. */
-static status get_key_file(
-    certfile** key_file, commandline_opts* opts, rcpr_allocator* alloc,
-    const root_command* root);
 static status get_input_file(
     certfile** input_file, commandline_opts* opts, rcpr_allocator* alloc,
     const root_command* root);
@@ -68,7 +54,7 @@ int endorse_command_func(commandline_opts* opts)
     MODEL_ASSERT(NULL != root);
 
     /* get the key filename. */
-    TRY_OR_FAIL(get_key_file(&key_file, opts, root->alloc, root), done);
+    TRY_OR_FAIL(endorse_get_key_file(&key_file, opts, root->alloc, root), done);
 
     /* get the input filename. */
     TRY_OR_FAIL(
@@ -126,64 +112,6 @@ cleanup_input_file:
 
 cleanup_key_file:
     CLEANUP_OR_CASCADE(&key_file->hdr);
-
-done:
-    return retval;
-}
-
-/**
- * \brief Key the key filename and output an error message if unset.
- */
-static status get_key_file(
-    certfile** key_file, commandline_opts* opts, rcpr_allocator* alloc,
-    const root_command* root)
-{
-    status retval;
-    file_stat_st fst;
-
-    /* check the key filename. */
-    if (NULL == root->key_filename)
-    {
-        fprintf(stderr, "Expecting a key filename (-k endorser.cert).\n");
-        retval = VCTOOL_ERROR_COMMANDLINE_MISSING_ARGUMENT;
-        goto done;
-    }
-
-    /* make sure the key file exists. */
-    retval = file_stat(opts->file, root->key_filename, &fst);
-    if (STATUS_SUCCESS != retval)
-    {
-        fprintf(stderr, "Missing key file %s.\n", root->key_filename);
-        goto done;
-    }
-
-    /* make sure the permission bits are set appropriately. */
-    mode_t bad_bits = S_ISUID | S_ISGID | S_ISVTX | S_IRWXG | S_IRWXO;
-    if (fst.fst_mode & bad_bits)
-    {
-        fprintf(
-            stderr, "Only user permissions allowed for %s.\n",
-            root->key_filename);
-        retval = VCTOOL_ERROR_COMMANDLINE_BAD_FILE_PERMISSIONS;
-        goto done;
-    }
-    else if (! (fst.fst_mode & S_IRUSR))
-    {
-        fprintf(stderr, "Can't read %s.\n", root->key_filename);
-        goto done;
-    }
-
-    /* create the key certfile. */
-    retval = certfile_create(key_file, alloc, root->key_filename, fst.fst_size);
-    if (STATUS_SUCCESS != retval)
-    {
-        fprintf(stderr, "Can't create certfile for %s.\n", root->key_filename);
-        goto done;
-    }
-
-    /* success. */
-    retval = STATUS_SUCCESS;
-    goto done;
 
 done:
     return retval;
