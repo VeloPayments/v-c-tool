@@ -12,9 +12,6 @@ RCPR_IMPORT_allocator_as(rcpr);
 RCPR_IMPORT_resource;
 
 /* forward decls. */
-static status get_input_file(
-    certfile** input_file, commandline_opts* opts, rcpr_allocator* alloc,
-    const root_command* root);
 static status get_output_filename(
     char** output_filename, commandline_opts* opts, const char* input_filename,
     const root_command* root);
@@ -58,7 +55,9 @@ int endorse_command_func(commandline_opts* opts)
 
     /* get the input filename. */
     TRY_OR_FAIL(
-        get_input_file(&input_file, opts, root->alloc, root), cleanup_key_file);
+        endorse_get_input_file(
+            &input_file, opts, root->alloc, root),
+        cleanup_key_file);
 
     /* get the output filename. */
     TRY_OR_FAIL(
@@ -112,50 +111,6 @@ cleanup_input_file:
 
 cleanup_key_file:
     CLEANUP_OR_CASCADE(&key_file->hdr);
-
-done:
-    return retval;
-}
-
-/**
- * \brief Key the input filename and output an error message if unset.
- */
-static status get_input_file(
-    certfile** input_file, commandline_opts* opts, rcpr_allocator* alloc,
-    const root_command* root)
-{
-    status retval;
-    file_stat_st fst;
-
-    /* check the input filename. */
-    if (NULL == root->input_filename)
-    {
-        fprintf(stderr, "Expecting an input filename (-i user.pub).\n");
-        retval = VCTOOL_ERROR_COMMANDLINE_MISSING_ARGUMENT;
-        goto done;
-    }
-
-    /* make sure the input file exists. */
-    retval = file_stat(opts->file, root->input_filename, &fst);
-    if (STATUS_SUCCESS != retval)
-    {
-        fprintf(stderr, "Missing input file %s.\n", root->input_filename);
-        goto done;
-    }
-
-    /* create the input certfile. */
-    retval =
-        certfile_create(input_file, alloc, root->input_filename, fst.fst_size);
-    if (STATUS_SUCCESS != retval)
-    {
-        fprintf(
-            stderr, "Can't create certfile for %s.\n", root->input_filename);
-        goto done;
-    }
-
-    /* success. */
-    retval = STATUS_SUCCESS;
-    goto done;
 
 done:
     return retval;
