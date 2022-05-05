@@ -112,6 +112,22 @@ status endorse_read_password_and_decrypt_certfile(
     vccrypt_buffer_t* decrypted_cert, commandline_opts* opts,
     const vccrypt_buffer_t* encrypted_cert);
 
+/**
+ * \brief Read the input certificate to be endorsed.
+ *
+ * \param cert               Pointer to buffer that will be initialized with the
+ *                           certificate.
+ * \param opts               The command-line options to use.
+ * \param key_file           The certfile from which the key certificate is
+ *                           read.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_read_input_certificate(
+    vccrypt_buffer_t* cert, commandline_opts* opts, const certfile* input_file);
+
 /* make this header C++ friendly. */
 #ifdef __cplusplus
 }
