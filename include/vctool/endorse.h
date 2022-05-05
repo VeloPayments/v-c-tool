@@ -12,6 +12,7 @@
 #include <rcpr/rbtree.h>
 #include <rcpr/resource/protected.h>
 #include <stdint.h>
+#include <vccrypt/buffer.h>
 #include <vpr/uuid.h>
 
 /* make this header C++ friendly. */
@@ -147,6 +148,21 @@ struct endorse_config_context
 #define YY_TYPEDEF_YY_SCANNER_T
 typedef void* yyscan_t;
 #endif /*YY_TYPEDEF_YY_SCANNER_T*/
+
+/**
+ * \brief Parse a config file read into memory as a buffer.
+ *
+ * \param root          Pointer to receive the root of the AST.
+ * \param context       The endorse config context for this parse.
+ * \param input         The input buffer to parse. Must be ASCIIZ.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_parse(
+    endorse_config** root, endorse_config_context* context,
+    const vccrypt_buffer_t* input);
 
 /**
  * \brief Analyze the AST produced by the endorse file parser and finish
