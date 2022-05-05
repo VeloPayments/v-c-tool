@@ -43,6 +43,23 @@ status endorse_get_key_file(
     certfile** key_file, commandline_opts* opts, RCPR_SYM(allocator)* alloc,
     const root_command* root);
 
+/**
+ * \brief Get the input file and output an error message if the input file
+ * option is not set on the command line.
+ *
+ * \param input_file    Pointer to receive the input file certfile instance.
+ * \param opts          The command-line options to use.
+ * \param alloc         The allocator to use.
+ * \param root          The root command instance.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_get_input_file(
+    certfile** input_file, commandline_opts* opts, RCPR_SYM(allocator)* alloc,
+    const root_command* root);
+
 /* make this header C++ friendly. */
 #ifdef __cplusplus
 }
