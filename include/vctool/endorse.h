@@ -192,7 +192,7 @@ status endorse_config_create_default(
  *
  * \returns The number of error messages.
  */
-int endorse_config_default_context_get_error_message_count(
+size_t endorse_config_default_context_get_error_message_count(
     const endorse_config_context* context);
 
 /**
