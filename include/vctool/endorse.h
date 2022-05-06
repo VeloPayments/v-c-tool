@@ -150,6 +150,78 @@ typedef void* yyscan_t;
 #endif /*YY_TYPEDEF_YY_SCANNER_T*/
 
 /**
+ * \brief Create an endorse context using the given set_error, value callback,
+ * and user context values.
+ *
+ * \note This function creates a resource, but does not add resource management
+ * for the user context. This is up to the caller.
+ *
+ * \param context       Pointer to receive the new context.
+ * \param alloc         The allocator to use for this operation.
+ * \param set_error     The set_error function callback.
+ * \param val_callback  The value callback.
+ * \param user_context  The user context.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_config_create_ex(
+    endorse_config_context** context, RCPR_SYM(allocator)* alloc,
+    endorse_config_set_error_fn set_error,
+    endorse_config_val_callback_fn val_callback, void* user_context);
+
+/**
+ * \brief Create a default endorse config context that saves a list of errors
+ * and saves the endorse config root.
+ *
+ * \param context       Pointer to receive the default context.
+ * \param alloc         The allocator to use to create this context.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_config_create_default(
+    endorse_config_context** context, RCPR_SYM(allocator)* alloc);
+
+/**
+ * \brief Get the number of error messages from the default endorse config.
+ *
+ * \param context       Pointer to the config context.
+ *
+ * \returns The number of error messages.
+ */
+int endorse_config_default_context_get_error_message_count(
+    const endorse_config_context* context);
+
+/**
+ * \brief Get the endorse config root.
+ *
+ * \param context       Pointer to the config context.
+ *
+ * \returns The endorse config root.
+ */
+const endorse_config* endorse_config_default_context_get_endorse_config_root(
+    const endorse_config_context* context);
+
+/**
+ * \brief Get the Nth error message from the default endorse config.
+ *
+ * \param msg           Pointer to receive the error message pointer. This error
+ *                      message is owned by the config context and must not be
+ *                      freed.
+ * \param context       Pointer to receive the default context.
+ * \param index         The error message index.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_config_default_context_get_error_message(
+    const char** msg, const endorse_config_context* context, int index);
+
+/**
  * \brief Parse a config file read into memory as a buffer.
  *
  * \param root          Pointer to receive the root of the AST.
