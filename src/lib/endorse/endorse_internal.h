@@ -34,6 +34,19 @@ struct endorse_config_default_user_context
 };
 
 /**
+ * \brief An error message.
+ */
+typedef struct endorse_config_error_message_node
+endorse_config_error_message_node;
+
+struct endorse_config_error_message_node
+{
+    RCPR_SYM(resource) hdr;
+    RCPR_SYM(allocator)* alloc;
+    char* msg;
+};
+
+/**
  * \brief Set an error message in the default config.
  *
  * \param context       The endorse config context for this operation.
@@ -74,6 +87,33 @@ status endorse_config_default_user_context_resource_release(
  *      - a non-zero error code on failure.
  */
 status endorse_config_context_wrap_default_user_context_resource_release(
+    RCPR_SYM(resource)* r);
+
+/**
+ * \brief Create an error message node, duplicating an error string.
+ *
+ * \param node          Pointer to receive the new node.
+ * \param alloc         The allocator to use.
+ * \param msg           The error message string to duplicate.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_config_error_message_node_create(
+    endorse_config_error_message_node** node, RCPR_SYM(allocator)* alloc,
+    const char* msg);
+
+/**
+ * \brief Release an error message node.
+ *
+ * \param r             The resource to release.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_config_error_message_node_resource_release(
     RCPR_SYM(resource)* r);
 
 /* make this header C++ friendly. */
