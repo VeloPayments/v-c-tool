@@ -22,6 +22,12 @@ extern "C" {
 #define VCTOOL_ERROR_ENDORSE_WOULD_CLOBBER_FILE \
     VCTOOL_STATUS_ERROR_MACRO(VCTOOL_COMPONENT_ENDORSE, 0x0001U)
 
+/**
+ * \brief The error message index is out of bounds.
+ */
+#define VCTOOL_ERROR_ENDORSE_ERROR_MESSAGE_INDEX_OUT_OF_BOUNDS \
+    VCTOOL_STATUS_ERROR_MACRO(VCTOOL_COMPONENT_ENDORSE, 0x0002U)
+
 /* make this header C++ friendly. */
 #ifdef __cplusplus
 }
