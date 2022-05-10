@@ -224,7 +224,6 @@ status endorse_config_default_context_get_error_message(
 /**
  * \brief Parse a config file read into memory as a buffer.
  *
- * \param root          Pointer to receive the root of the AST.
  * \param context       The endorse config context for this parse.
  * \param input         The input buffer to parse. Must be ASCIIZ.
  *
@@ -233,8 +232,7 @@ status endorse_config_default_context_get_error_message(
  *      - a non-zero error code on failure.
  */
 status endorse_parse(
-    endorse_config** root, endorse_config_context* context,
-    const vccrypt_buffer_t* input);
+    endorse_config_context* context, const vccrypt_buffer_t* input);
 
 /**
  * \brief Analyze the AST produced by the endorse file parser and finish
