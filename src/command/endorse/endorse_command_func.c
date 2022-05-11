@@ -6,6 +6,8 @@
  * \copyright 2022 Velo Payments.  See License.txt for license terms.
  */
 
+#include <vctool/endorse.h>
+
 #include "endorse_internal.h"
 
 RCPR_IMPORT_allocator_as(rcpr);
@@ -29,6 +31,8 @@ int endorse_command_func(commandline_opts* opts)
     char* output_filename;
     vccrypt_buffer_t key_cert;
     vccrypt_buffer_t input_cert;
+    vccrypt_buffer_t endorse_cfg;
+    endorse_config_context* endorse_ctx;
 
     /* parameter sanity checks. */
     MODEL_ASSERT(PROP_VALID_COMMANDLINE_OPTS(opts));
@@ -70,7 +74,17 @@ int endorse_command_func(commandline_opts* opts)
         endorse_read_input_certificate(&input_cert, opts, input_file),
         cleanup_key_cert);
 
-    /* Read / parse the endorse config file. */
+    /* create the endorse config context. */
+    TRY_OR_FAIL(
+        endorse_config_create_default(&endorse_ctx, root->alloc),
+        cleanup_input_cert);
+
+    /* Read the endorse config file. */
+    TRY_OR_FAIL(
+        endorse_read_endorse_config_file(
+            &endorse_cfg, opts, endorse_config_file),
+        cleanup_endorse_ctx);
+
     /* For each dictionary definition: */
         /* Verify that the definition is an entity in the config. */
         /* Verify that the file is a valid public key file and read it. */
@@ -91,7 +105,13 @@ int endorse_command_func(commandline_opts* opts)
 
     fprintf(stderr, "endorse not yet implemented.\n");
 
-    goto cleanup_input_cert;
+    goto cleanup_endorse_cfg;
+
+cleanup_endorse_cfg:
+    dispose(vccrypt_buffer_disposable_handle(&endorse_cfg));
+
+cleanup_endorse_ctx:
+    CLEANUP_OR_CASCADE(&endorse_ctx->hdr);
 
 cleanup_input_cert:
     dispose(vccrypt_buffer_disposable_handle(&input_cert));
