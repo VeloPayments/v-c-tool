@@ -61,6 +61,24 @@ status endorse_get_input_file(
     const root_command* root);
 
 /**
+ * \brief Get the endorse config file and output an error message if the endorse
+ * config file option is not set on the command line.
+ *
+ * \param endorse_config_file   Pointer to receive the input file certfile
+ *                              instance.
+ * \param opts                  The command-line options to use.
+ * \param alloc                 The allocator to use.
+ * \param root                  The root command instance.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_get_endorse_config_file(
+    certfile** endorse_config_file, commandline_opts* opts,
+    RCPR_SYM(allocator)* alloc, const root_command* root);
+
+/**
  * \brief Get the output filename and output an error message if the output file
  * would clobber an existing file.
  *
