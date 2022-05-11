@@ -25,6 +25,7 @@ int endorse_command_func(commandline_opts* opts)
     status retval, release_retval;
     certfile* key_file;
     certfile* input_file;
+    certfile* endorse_config_file;
     char* output_filename;
     vccrypt_buffer_t key_cert;
     vccrypt_buffer_t input_cert;
@@ -47,11 +48,17 @@ int endorse_command_func(commandline_opts* opts)
             &input_file, opts, root->alloc, root),
         cleanup_key_file);
 
+    /* get the endorse config filename. */
+    TRY_OR_FAIL(
+        endorse_get_endorse_config_file(
+            &endorse_config_file, opts, root->alloc, root),
+        cleanup_input_file);
+
     /* get the output filename. */
     TRY_OR_FAIL(
         endorse_get_output_filename(
             &output_filename, opts, input_file->filename, root),
-        cleanup_input_file);
+        cleanup_endorse_config_file);
 
     /* Verify that the endorser private key is valid and read it. */
     TRY_OR_FAIL(
@@ -94,6 +101,9 @@ cleanup_key_cert:
 
 cleanup_output_filename:
     free(output_filename);
+
+cleanup_endorse_config_file:
+    CLEANUP_OR_CASCADE(&endorse_config_file->hdr);
 
 cleanup_input_file:
     CLEANUP_OR_CASCADE(&input_file->hdr);
