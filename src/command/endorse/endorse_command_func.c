@@ -33,6 +33,7 @@ int endorse_command_func(commandline_opts* opts)
     vccrypt_buffer_t input_cert;
     vccrypt_buffer_t endorse_cfg;
     endorse_config_context* endorse_ctx;
+    const endorse_config* ast;
 
     /* parameter sanity checks. */
     MODEL_ASSERT(PROP_VALID_COMMANDLINE_OPTS(opts));
@@ -84,6 +85,19 @@ int endorse_command_func(commandline_opts* opts)
         endorse_read_endorse_config_file(
             &endorse_cfg, opts, endorse_config_file),
         cleanup_endorse_ctx);
+
+    /* parse the endorse config file. */
+    TRY_OR_FAIL(
+        endorse_parse(endorse_ctx, &endorse_cfg),
+        cleanup_endorse_cfg);
+
+    /* get the root config. */
+    ast = endorse_config_default_context_get_endorse_config_root(endorse_ctx);
+
+    /* perform semantic analysis on the endorse config. */
+    TRY_OR_FAIL(
+        endorse_analyze(endorse_ctx, (endorse_config*)ast),
+        cleanup_endorse_cfg);
 
     /* For each dictionary definition: */
         /* Verify that the definition is an entity in the config. */
