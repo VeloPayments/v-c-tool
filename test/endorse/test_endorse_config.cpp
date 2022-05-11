@@ -7,10 +7,9 @@
  */
 
 #include <minunit/minunit.h>
-#include <string>
 #include <string.h>
 #include <vctool/endorse.h>
-#include <vector>
+#include <vpr/allocator/malloc_allocator.h>
 
 extern "C" {
 #include "endorse.tab.h"
@@ -27,128 +26,55 @@ RCPR_IMPORT_resource;
 TEST_SUITE(endorse_config);
 
 /**
- * \brief Simple user context structure for testing.
- */
-struct test_context
-{
-    resource hdr;
-    rcpr_allocator* alloc;
-    vector<string>* errors;
-    endorse_config* config;
-};
-
-/**
- * \brief Release a test context resource.
- */
-static status test_context_resource_release(resource* r)
-{
-    status config_release_retval = STATUS_SUCCESS;
-    status release_retval = STATUS_SUCCESS;
-    test_context* ctx = (test_context*)r;
-
-    rcpr_allocator* alloc = ctx->alloc;
-
-    if (nullptr != ctx->config)
-    {
-        config_release_retval = resource_release(&ctx->config->hdr);
-    }
-
-    delete ctx->errors;
-
-    release_retval = rcpr_allocator_reclaim(alloc, ctx);
-
-    if (STATUS_SUCCESS != config_release_retval)
-    {
-        return config_release_retval;
-    }
-    else
-    {
-        return release_retval;
-    }
-}
-
-/**
- * \brief Initialize a test_context structure.
- */
-static status test_context_create(test_context** ctx, rcpr_allocator* alloc)
-{
-    status retval;
-
-    retval = rcpr_allocator_allocate(alloc, (void**)ctx, sizeof(test_context));
-    if (STATUS_SUCCESS != retval)
-    {
-        return retval;
-    }
-
-    resource_init(&(*ctx)->hdr, &test_context_resource_release);
-    (*ctx)->alloc = alloc;
-    (*ctx)->errors = new vector<string>();
-    (*ctx)->config = nullptr;
-
-    return STATUS_SUCCESS;
-}
-
-/**
- * \brief Simple error setting override.
- */
-static void set_error(endorse_config_context* context, const char* msg)
-{
-    test_context* ctx = (test_context*)context->user_context;
-
-    ctx->errors->push_back(msg);
-}
-
-/**
- * \brief Simple value setting override.
- */
-static void config_callback(
-    endorse_config_context* context, endorse_config* config)
-{
-    test_context* ctx = (test_context*)context->user_context;
-
-    ctx->config = config;
-}
-
-/**
  * Test that an empty config file produces a blank config.
  */
 TEST(empty_config)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] = "";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != (state = yy_scan_string("", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
 
     /* verify user config. */
-    TEST_ASSERT(nullptr != user_context->config);
+    const endorse_config* root =
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
     /* There should only be one reference to this config. */
-    TEST_EXPECT(1 == user_context->config->reference_count);
+    TEST_EXPECT(1 == root->reference_count);
     /* the entities tree should not be NULL. */
-    TEST_ASSERT(nullptr != user_context->config->entities);
+    TEST_ASSERT(nullptr != root->entities);
     /* the number of entities should be zero. */
-    TEST_EXPECT(0 == rbtree_count(user_context->config->entities));
+    TEST_EXPECT(0 == rbtree_count(root->entities));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -159,32 +85,40 @@ TEST(empty_config)
  */
 TEST(bad_config)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] = "some garbage";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != (state = yy_scan_string("some garbage", scanner)));
-    TEST_ASSERT(0 != yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
 
-    /* there are errors. */
-    TEST_ASSERT(0U != user_context->errors->size());
+    /* parsing will fail. */
+    TEST_ASSERT(STATUS_SUCCESS != endorse_parse(ctx, &input));
+
+    /* there are no errors. */
+    TEST_ASSERT(
+        0U != endorse_config_default_context_get_error_message_count(ctx));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -195,41 +129,51 @@ TEST(bad_config)
  */
 TEST(empty_entities_block)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] = "entities { }";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != (state = yy_scan_string("entities { }", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
 
     /* verify user config. */
-    TEST_ASSERT(nullptr != user_context->config);
+    const endorse_config* root =
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
     /* There should only be one reference to this config. */
-    TEST_EXPECT(1 == user_context->config->reference_count);
+    TEST_EXPECT(1 == root->reference_count);
     /* the entities tree should not be NULL. */
-    TEST_ASSERT(nullptr != user_context->config->entities);
+    TEST_ASSERT(nullptr != root->entities);
     /* the number of entities should be zero. */
-    TEST_EXPECT(0 == rbtree_count(user_context->config->entities));
+    TEST_EXPECT(0 == rbtree_count(root->entities));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -240,55 +184,65 @@ TEST(empty_entities_block)
  */
 TEST(entities_block)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
     resource* val;
+    const char INPUT[] = "entities { foo bar baz }";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state = yy_scan_string("entities { foo bar baz }", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
 
     /* verify user config. */
-    TEST_ASSERT(nullptr != user_context->config);
+    const endorse_config* root =
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
     /* There should only be one reference to this config. */
-    TEST_EXPECT(1 == user_context->config->reference_count);
+    TEST_EXPECT(1 == root->reference_count);
     /* the entities tree should not be NULL. */
-    TEST_ASSERT(nullptr != user_context->config->entities);
+    TEST_ASSERT(nullptr != root->entities);
     /* the number of entities should be three. */
-    TEST_EXPECT(3 == rbtree_count(user_context->config->entities));
+    TEST_EXPECT(3 == rbtree_count(root->entities));
+
     /* we can find foo. */
     TEST_EXPECT(
         STATUS_SUCCESS ==
-            rbtree_find(&val, user_context->config->entities, "foo"));
+            rbtree_find(&val, root->entities, "foo"));
     /* we can find bar. */
     TEST_EXPECT(
         STATUS_SUCCESS ==
-            rbtree_find(&val, user_context->config->entities, "bar"));
+            rbtree_find(&val, root->entities, "bar"));
     /* we can find baz. */
     TEST_EXPECT(
         STATUS_SUCCESS ==
-            rbtree_find(&val, user_context->config->entities, "baz"));
+            rbtree_find(&val, root->entities, "baz"));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -299,37 +253,43 @@ TEST(entities_block)
  */
 TEST(duplicate_entity_decls)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] =
+        R"MULTI(
+            entities { foo bar foo }
+        )MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                    entities { foo bar foo }
-                )MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are errors. */
-    TEST_ASSERT(0U != user_context->errors->size());
+    TEST_ASSERT(
+        0U != endorse_config_default_context_get_error_message_count(ctx));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -340,45 +300,52 @@ TEST(duplicate_entity_decls)
  */
 TEST(empty_verb_block)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
     resource* val;
+    const char INPUT[] = "verbs for agentd { }";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state = yy_scan_string("verbs for agentd { }", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
 
     /* verify user config. */
-    TEST_ASSERT(nullptr != user_context->config);
+    const endorse_config* root =
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
     /* There should only be one reference to this config. */
-    TEST_EXPECT(1 == user_context->config->reference_count);
+    TEST_EXPECT(1 == root->reference_count);
     /* the entities tree should not be NULL. */
-    TEST_ASSERT(nullptr != user_context->config->entities);
-    /* the number of entities should be three. */
-    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+    TEST_ASSERT(nullptr != root->entities);
+    /* the number of entities should be one. */
+    TEST_EXPECT(1 == rbtree_count(root->entities));
 
     /* we can find agentd. */
     TEST_ASSERT(
         STATUS_SUCCESS ==
-            rbtree_find(&val, user_context->config->entities, "agentd"));
+            rbtree_find(&val, root->entities, "agentd"));
 
     /* examine properties of agentd. */
     endorse_entity* agentd = (endorse_entity*)val;
@@ -390,7 +357,9 @@ TEST(empty_verb_block)
     TEST_EXPECT(0 == rbtree_count(agentd->verbs));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -401,50 +370,56 @@ TEST(empty_verb_block)
  */
 TEST(empty_verb_block_declared_entity)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
     resource* val;
+    const char INPUT[] =
+        R"MULTI(
+            entities { agentd }
+            verbs for agentd { }
+        )MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                    entities { agentd }
-                    verbs for agentd { }
-                )MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
 
     /* verify user config. */
-    TEST_ASSERT(nullptr != user_context->config);
+    const endorse_config* root =
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
     /* There should only be one reference to this config. */
-    TEST_EXPECT(1 == user_context->config->reference_count);
+    TEST_EXPECT(1 == root->reference_count);
     /* the entities tree should not be NULL. */
-    TEST_ASSERT(nullptr != user_context->config->entities);
-    /* the number of entities should be three. */
-    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+    TEST_ASSERT(nullptr != root->entities);
+    /* the number of entities should be one. */
+    TEST_EXPECT(1 == rbtree_count(root->entities));
 
     /* we can find agentd. */
     TEST_ASSERT(
         STATUS_SUCCESS ==
-            rbtree_find(&val, user_context->config->entities, "agentd"));
+            rbtree_find(&val, root->entities, "agentd"));
 
     /* examine properties of agentd. */
     endorse_entity* agentd = (endorse_entity*)val;
@@ -456,7 +431,9 @@ TEST(empty_verb_block_declared_entity)
     TEST_EXPECT(0 == rbtree_count(agentd->verbs));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -467,52 +444,58 @@ TEST(empty_verb_block_declared_entity)
  */
 TEST(verb_block_with_verbs)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
     resource* val;
+    const char INPUT[] =
+        R"MULTI(
+            verbs for agentd {
+                block_get           f382e365-1224-43b4-924a-1de4d9f4cf25
+                transaction_get     7df210d6-f00b-47c4-a608-6f3f1df7511a
+                artifact_get        fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+            })MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                verbs for agentd {
-                    block_get           f382e365-1224-43b4-924a-1de4d9f4cf25
-                    transaction_get     7df210d6-f00b-47c4-a608-6f3f1df7511a
-                    artifact_get        fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
-                })MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
 
     /* verify user config. */
-    TEST_ASSERT(nullptr != user_context->config);
+    const endorse_config* root =
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
     /* There should only be one reference to this config. */
-    TEST_EXPECT(1 == user_context->config->reference_count);
+    TEST_EXPECT(1 == root->reference_count);
     /* the entities tree should not be NULL. */
-    TEST_ASSERT(nullptr != user_context->config->entities);
-    /* the number of entities should be three. */
-    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+    TEST_ASSERT(nullptr != root->entities);
+    /* the number of entities should be one. */
+    TEST_EXPECT(1 == rbtree_count(root->entities));
 
     /* we can find agentd. */
     TEST_ASSERT(
         STATUS_SUCCESS ==
-            rbtree_find(&val, user_context->config->entities, "agentd"));
+            rbtree_find(&val, root->entities, "agentd"));
 
     /* examine properties of agentd. */
     endorse_entity* agentd = (endorse_entity*)val;
@@ -575,7 +558,9 @@ TEST(verb_block_with_verbs)
     TEST_EXPECT(0 == memcmp(&artifact_get->verb_id, &artifact_get_uuid, 16));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -586,41 +571,47 @@ TEST(verb_block_with_verbs)
  */
 TEST(duplicate_verbs_for_entity)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] =
+        R"MULTI(
+        verbs for agentd {
+            block_get           f382e365-1224-43b4-924a-1de4d9f4cf25
+            transaction_get     7df210d6-f00b-47c4-a608-6f3f1df7511a
+            artifact_get        fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+            block_get           64f349a9-e065-426c-b72d-276e6bf016ca
+        })MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                verbs for agentd {
-                    block_get           f382e365-1224-43b4-924a-1de4d9f4cf25
-                    transaction_get     7df210d6-f00b-47c4-a608-6f3f1df7511a
-                    artifact_get        fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
-                    block_get           64f349a9-e065-426c-b72d-276e6bf016ca
-                })MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are errors. */
-    TEST_ASSERT(0U != user_context->errors->size());
+    TEST_ASSERT(
+        0U != endorse_config_default_context_get_error_message_count(ctx));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -631,44 +622,50 @@ TEST(duplicate_verbs_for_entity)
  */
 TEST(duplicate_verbs_for_entity2)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] =
+        R"MULTI(
+        verbs for agentd {
+            block_get           f382e365-1224-43b4-924a-1de4d9f4cf25
+            transaction_get     7df210d6-f00b-47c4-a608-6f3f1df7511a
+            artifact_get        fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+        }
 
+        verbs for agentd {
+            block_get           64f349a9-e065-426c-b72d-276e6bf016ca
+        })MULTI";
+
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                verbs for agentd {
-                    block_get           f382e365-1224-43b4-924a-1de4d9f4cf25
-                    transaction_get     7df210d6-f00b-47c4-a608-6f3f1df7511a
-                    artifact_get        fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
-                }
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
 
-                verbs for agentd {
-                    block_get           64f349a9-e065-426c-b72d-276e6bf016ca
-                })MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are errors. */
-    TEST_ASSERT(0U != user_context->errors->size());
+    TEST_ASSERT(
+        0U != endorse_config_default_context_get_error_message_count(ctx));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -679,48 +676,52 @@ TEST(duplicate_verbs_for_entity2)
  */
 TEST(empty_roles_block)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
     resource* val;
+    const char INPUT[] = "roles for agentd { }";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(roles for agentd { })MULTI",
-                scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
 
     /* verify user config. */
-    TEST_ASSERT(nullptr != user_context->config);
+    const endorse_config* root =
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
     /* There should only be one reference to this config. */
-    TEST_EXPECT(1 == user_context->config->reference_count);
+    TEST_EXPECT(1 == root->reference_count);
     /* the entities tree should not be NULL. */
-    TEST_ASSERT(nullptr != user_context->config->entities);
-    /* the number of entities should be three. */
-    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+    TEST_ASSERT(nullptr != root->entities);
+    /* the number of entities should be one. */
+    TEST_EXPECT(1 == rbtree_count(root->entities));
 
     /* we can find agentd. */
     TEST_ASSERT(
         STATUS_SUCCESS ==
-            rbtree_find(&val, user_context->config->entities, "agentd"));
+            rbtree_find(&val, root->entities, "agentd"));
 
     /* examine properties of agentd. */
     endorse_entity* agentd = (endorse_entity*)val;
@@ -732,7 +733,9 @@ TEST(empty_roles_block)
     TEST_EXPECT(0 == rbtree_count(agentd->roles));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -744,53 +747,58 @@ TEST(empty_roles_block)
  */
 TEST(empty_roles_block_declared_entity)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
     resource* val;
+    const char INPUT[] =
+        R"MULTI(
+        entities {
+            agentd
+        }
+        roles for agentd { }
+        )MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                    entities {
-                        agentd
-                    }
-                    roles for agentd { }
-                )MULTI",
-                scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
 
     /* verify user config. */
-    TEST_ASSERT(nullptr != user_context->config);
+    const endorse_config* root =
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
     /* There should only be one reference to this config. */
-    TEST_EXPECT(1 == user_context->config->reference_count);
+    TEST_EXPECT(1 == root->reference_count);
     /* the entities tree should not be NULL. */
-    TEST_ASSERT(nullptr != user_context->config->entities);
-    /* the number of entities should be three. */
-    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+    TEST_ASSERT(nullptr != root->entities);
+    /* the number of entities should be one. */
+    TEST_EXPECT(1 == rbtree_count(root->entities));
 
     /* we can find agentd. */
     TEST_ASSERT(
         STATUS_SUCCESS ==
-            rbtree_find(&val, user_context->config->entities, "agentd"));
+            rbtree_find(&val, root->entities, "agentd"));
 
     /* examine properties of agentd. */
     endorse_entity* agentd = (endorse_entity*)val;
@@ -802,7 +810,9 @@ TEST(empty_roles_block_declared_entity)
     TEST_EXPECT(0 == rbtree_count(agentd->roles));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -813,57 +823,62 @@ TEST(empty_roles_block_declared_entity)
  */
 TEST(empty_roles)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
     resource* val;
+    const char INPUT[] =
+        R"MULTI(
+        entities {
+            agentd
+        }
+        roles for agentd {
+            reader { }
+            submitter { }
+            extended_sentinel { }
+        }
+        )MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                    entities {
-                        agentd
-                    }
-                    roles for agentd {
-                        reader { }
-                        submitter { }
-                        extended_sentinel { }
-                    }
-                )MULTI",
-                scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
 
     /* verify user config. */
-    TEST_ASSERT(nullptr != user_context->config);
+    const endorse_config* root =
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
     /* There should only be one reference to this config. */
-    TEST_EXPECT(1 == user_context->config->reference_count);
+    TEST_EXPECT(1 == root->reference_count);
     /* the entities tree should not be NULL. */
-    TEST_ASSERT(nullptr != user_context->config->entities);
-    /* the number of entities should be three. */
-    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+    TEST_ASSERT(nullptr != root->entities);
+    /* the number of entities should be one. */
+    TEST_EXPECT(1 == rbtree_count(root->entities));
 
     /* we can find agentd. */
     TEST_ASSERT(
         STATUS_SUCCESS ==
-            rbtree_find(&val, user_context->config->entities, "agentd"));
+            rbtree_find(&val, root->entities, "agentd"));
 
     /* examine properties of agentd. */
     endorse_entity* agentd = (endorse_entity*)val;
@@ -914,7 +929,9 @@ TEST(empty_roles)
     TEST_EXPECT(0 == rbtree_count(extended_sentinel->verbs));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -925,46 +942,51 @@ TEST(empty_roles)
  */
 TEST(duplicate_roles)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] =
+        R"MULTI(
+        entities {
+            agentd
+        }
+        roles for agentd {
+            reader { }
+            submitter { }
+            extended_sentinel { }
+            reader { }
+        }
+        )MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                    entities {
-                        agentd
-                    }
-                    roles for agentd {
-                        reader { }
-                        submitter { }
-                        extended_sentinel { }
-                        reader { }
-                    }
-                )MULTI",
-                scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are errors. */
-    TEST_ASSERT(0U != user_context->errors->size());
+    TEST_ASSERT(
+        0U != endorse_config_default_context_get_error_message_count(ctx));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -975,59 +997,64 @@ TEST(duplicate_roles)
  */
 TEST(role_with_verbs)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
     resource* val;
+    const char INPUT[] =
+        R"MULTI(
+        entities {
+            agentd
+        }
+        roles for agentd {
+            reader {
+                latest_block_id_read
+                next_block_id_get
+                prev_block_id_get
+            }
+        }
+        )MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                    entities {
-                        agentd
-                    }
-                    roles for agentd {
-                        reader {
-                            latest_block_id_read
-                            next_block_id_get
-                            prev_block_id_get
-                        }
-                    }
-                )MULTI",
-                scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
 
     /* verify user config. */
-    TEST_ASSERT(nullptr != user_context->config);
+    const endorse_config* root =
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
     /* There should only be one reference to this config. */
-    TEST_EXPECT(1 == user_context->config->reference_count);
+    TEST_EXPECT(1 == root->reference_count);
     /* the entities tree should not be NULL. */
-    TEST_ASSERT(nullptr != user_context->config->entities);
-    /* the number of entities should be three. */
-    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+    TEST_ASSERT(nullptr != root->entities);
+    /* the number of entities should be one. */
+    TEST_EXPECT(1 == rbtree_count(root->entities));
 
     /* we can find agentd. */
     TEST_ASSERT(
         STATUS_SUCCESS ==
-            rbtree_find(&val, user_context->config->entities, "agentd"));
+            rbtree_find(&val, root->entities, "agentd"));
 
     /* examine properties of agentd. */
     endorse_entity* agentd = (endorse_entity*)val;
@@ -1096,7 +1123,9 @@ TEST(role_with_verbs)
     TEST_EXPECT(NULL == prev_block_id_get->verb);
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -1107,48 +1136,53 @@ TEST(role_with_verbs)
  */
 TEST(duplicate_role_verbs)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] =
+        R"MULTI(
+        entities {
+            agentd
+        }
+        roles for agentd {
+            reader {
+                latest_block_id_read
+                next_block_id_get
+                prev_block_id_get
+                latest_block_id_read
+            }
+        }
+        )MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                    entities {
-                        agentd
-                    }
-                    roles for agentd {
-                        reader {
-                            latest_block_id_read
-                            next_block_id_get
-                            prev_block_id_get
-                            latest_block_id_read
-                        }
-                    }
-                )MULTI",
-                scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are errors. */
-    TEST_ASSERT(0U != user_context->errors->size());
+    TEST_ASSERT(
+        0U != endorse_config_default_context_get_error_message_count(ctx));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -1159,44 +1193,54 @@ TEST(duplicate_role_verbs)
  */
 TEST(undeclared_entity_semantic_error)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] =
+        R"MULTI(
+        verbs for agentd {
+            block_get           f382e365-1224-43b4-924a-1de4d9f4cf25
+            transaction_get     7df210d6-f00b-47c4-a608-6f3f1df7511a
+            artifact_get        fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+        })MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                verbs for agentd {
-                    block_get           f382e365-1224-43b4-924a-1de4d9f4cf25
-                    transaction_get     7df210d6-f00b-47c4-a608-6f3f1df7511a
-                    artifact_get        fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
-                })MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
+
+    /* get the endorse config root. */
+    const endorse_config* root =
+        endorse_config_default_context_get_endorse_config_root(ctx);
 
     /* perform the semantic analysis on this config context. */
     TEST_ASSERT(
-        STATUS_SUCCESS != endorse_analyze(&context, user_context->config));
+        STATUS_SUCCESS != endorse_analyze(ctx, (endorse_config*)root));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -1207,47 +1251,58 @@ TEST(undeclared_entity_semantic_error)
  */
 TEST(undefined_verb_semantic_error)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] =
+        R"MULTI(
+        entities {
+            agentd
+        }
+        roles for agentd {
+            reader {
+                document_get
+            }
+        })MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                entities {
-                    agentd
-                }
-                roles for agentd {
-                    reader {
-                        document_get
-                    }
-                })MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
+
+    /* get the root config. */
+    endorse_config* root = (endorse_config*)
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
 
     /* perform the semantic analysis on this config context. */
     TEST_ASSERT(
-        STATUS_SUCCESS != endorse_analyze(&context, user_context->config));
+        STATUS_SUCCESS != endorse_analyze(ctx, root));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -1259,62 +1314,71 @@ TEST(undefined_verb_semantic_error)
  */
 TEST(semantic_analyzer_populates_verb_references)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
     resource* val;
+    const char INPUT[] =
+        R"MULTI(
+        entities {
+            agentd
+        }
+        verbs for agentd {
+            latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
+        }
+        roles for agentd {
+            reader {
+                latest_block_id_get
+            }
+        })MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                entities {
-                    agentd
-                }
-                verbs for agentd {
-                    latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
-                }
-                roles for agentd {
-                    reader {
-                        latest_block_id_get
-                    }
-                })MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
+
+    /* get the root config. */
+    endorse_config* root = (endorse_config*)
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
 
     /* perform the semantic analysis on this config context. */
     TEST_ASSERT(
-        STATUS_SUCCESS == endorse_analyze(&context, user_context->config));
+        STATUS_SUCCESS == endorse_analyze(ctx, root));
 
     /* verify user config. */
-    TEST_ASSERT(nullptr != user_context->config);
+    TEST_ASSERT(nullptr != root);
     /* There should only be one reference to this config. */
-    TEST_EXPECT(1 == user_context->config->reference_count);
+    TEST_EXPECT(1 == root->reference_count);
     /* the entities tree should not be NULL. */
-    TEST_ASSERT(nullptr != user_context->config->entities);
+    TEST_ASSERT(nullptr != root->entities);
     /* the number of entities should be one. */
-    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+    TEST_ASSERT(1 == rbtree_count(root->entities));
 
     /* we can find agentd. */
     TEST_ASSERT(
         STATUS_SUCCESS ==
-            rbtree_find(&val, user_context->config->entities, "agentd"));
+            rbtree_find(&val, root->entities, "agentd"));
 
     /* examine properties of agentd. */
     endorse_entity* agentd = (endorse_entity*)val;
@@ -1376,7 +1440,9 @@ TEST(semantic_analyzer_populates_verb_references)
         latest_block_id_get == rv_latest_block_id_get->verb);
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -1387,58 +1453,64 @@ TEST(semantic_analyzer_populates_verb_references)
  */
 TEST(role_extends)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
     resource* val;
+    const char INPUT[] =
+        R"MULTI(
+        entities {
+            agentd
+        }
+        roles for agentd {
+            reader {
+                latest_block_id_get
+            }
+            writer extends reader {
+                transaction_submit
+            }
+        })MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                entities {
-                    agentd
-                }
-                roles for agentd {
-                    reader {
-                        latest_block_id_get
-                    }
-                    writer extends reader {
-                        transaction_submit
-                    }
-                })MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
 
     /* verify user config. */
-    TEST_ASSERT(nullptr != user_context->config);
+    const endorse_config* root =
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
     /* There should only be one reference to this config. */
-    TEST_EXPECT(1 == user_context->config->reference_count);
+    TEST_EXPECT(1 == root->reference_count);
     /* the entities tree should not be NULL. */
-    TEST_ASSERT(nullptr != user_context->config->entities);
+    TEST_ASSERT(nullptr != root->entities);
     /* the number of entities should be one. */
-    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+    TEST_EXPECT(1 == rbtree_count(root->entities));
 
     /* we can find agentd. */
     TEST_ASSERT(
         STATUS_SUCCESS ==
-            rbtree_find(&val, user_context->config->entities, "agentd"));
+            rbtree_find(&val, root->entities, "agentd"));
 
     /* examine properties of agentd. */
     endorse_entity* agentd = (endorse_entity*)val;
@@ -1479,7 +1551,9 @@ TEST(role_extends)
     TEST_EXPECT(0 == strcmp(writer->extends_role_name, "reader"));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -1491,74 +1565,81 @@ TEST(role_extends)
  */
 TEST(role_extends_semantic_analysis)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
     resource* val;
+    const char INPUT[] =
+        R"MULTI(
+        entities {
+            agentd
+        }
+        verbs for agentd {
+            latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
+            next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
+            prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
+            block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
+            transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
+            transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
+            artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+            assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
+            sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
+        }
+        roles for agentd {
+            reader {
+                latest_block_id_get
+                block_get
+            }
+            writer extends reader {
+                transaction_submit
+            }
+        })MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                entities {
-                    agentd
-                }
-                verbs for agentd {
-                    latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
-                    next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
-                    prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
-                    block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
-                    transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
-                    transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
-                    artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
-                    assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
-                    sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
-                }
-                roles for agentd {
-                    reader {
-                        latest_block_id_get
-                        block_get
-                    }
-                    writer extends reader {
-                        transaction_submit
-                    }
-                })MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
+
+    /* verify user config. */
+    endorse_config* root = (endorse_config*)
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
 
     /* perform the semantic analysis on this config context. */
     TEST_ASSERT(
-        STATUS_SUCCESS == endorse_analyze(&context, user_context->config));
+        STATUS_SUCCESS == endorse_analyze(ctx, root));
 
-    /* verify user config. */
-    TEST_ASSERT(nullptr != user_context->config);
     /* There should only be one reference to this config. */
-    TEST_EXPECT(1 == user_context->config->reference_count);
+    TEST_EXPECT(1 == root->reference_count);
     /* the entities tree should not be NULL. */
-    TEST_ASSERT(nullptr != user_context->config->entities);
+    TEST_ASSERT(nullptr != root->entities);
     /* the number of entities should be one. */
-    TEST_ASSERT(1 == rbtree_count(user_context->config->entities));
+    TEST_EXPECT(1 == rbtree_count(root->entities));
 
     /* we can find agentd. */
     TEST_ASSERT(
         STATUS_SUCCESS ==
-            rbtree_find(&val, user_context->config->entities, "agentd"));
+            rbtree_find(&val, root->entities, "agentd"));
 
     /* examine properties of agentd. */
     endorse_entity* agentd = (endorse_entity*)val;
@@ -1605,7 +1686,9 @@ TEST(role_extends_semantic_analysis)
     TEST_EXPECT(reader == writer->extends_role);
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -1617,65 +1700,77 @@ TEST(role_extends_semantic_analysis)
  */
 TEST(role_extends_analysis_circular_n0)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] =
+        R"MULTI(
+        entities {
+            agentd
+        }
+        verbs for agentd {
+            latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
+            next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
+            prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
+            block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
+            transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
+            transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
+            artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+            assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
+            sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
+        }
+        roles for agentd {
+            reader {
+                latest_block_id_get
+                block_get
+            }
+            writer extends writer {
+                transaction_submit
+            }
+        })MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                entities {
-                    agentd
-                }
-                verbs for agentd {
-                    latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
-                    next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
-                    prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
-                    block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
-                    transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
-                    transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
-                    artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
-                    assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
-                    sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
-                }
-                roles for agentd {
-                    reader {
-                        latest_block_id_get
-                        block_get
-                    }
-                    writer extends writer {
-                        transaction_submit
-                    }
-                })MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
+
+    /* verify user config. */
+    endorse_config* root = (endorse_config*)
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
 
     /* Semantic analysis fails due to circular reference. */
     TEST_ASSERT(
-        STATUS_SUCCESS != endorse_analyze(&context, user_context->config));
+        STATUS_SUCCESS != endorse_analyze(ctx, root));
 
     /* errors were set. */
-    TEST_ASSERT(0U != user_context->errors->size());
+    TEST_ASSERT(
+        0U != endorse_config_default_context_get_error_message_count(ctx));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -1687,65 +1782,77 @@ TEST(role_extends_analysis_circular_n0)
  */
 TEST(role_extends_analysis_circular_n1)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] =
+        R"MULTI(
+        entities {
+            agentd
+        }
+        verbs for agentd {
+            latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
+            next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
+            prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
+            block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
+            transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
+            transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
+            artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+            assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
+            sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
+        }
+        roles for agentd {
+            reader extends writer {
+                latest_block_id_get
+                block_get
+            }
+            writer extends reader {
+                transaction_submit
+            }
+        })MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                entities {
-                    agentd
-                }
-                verbs for agentd {
-                    latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
-                    next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
-                    prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
-                    block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
-                    transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
-                    transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
-                    artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
-                    assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
-                    sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
-                }
-                roles for agentd {
-                    reader extends writer {
-                        latest_block_id_get
-                        block_get
-                    }
-                    writer extends reader {
-                        transaction_submit
-                    }
-                })MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
+
+    /* get root. */
+    endorse_config* root = (endorse_config*)
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
 
     /* Semantic analysis fails due to circular reference. */
     TEST_ASSERT(
-        STATUS_SUCCESS != endorse_analyze(&context, user_context->config));
+        STATUS_SUCCESS != endorse_analyze(ctx, root));
 
     /* errors were set. */
-    TEST_ASSERT(0U != user_context->errors->size());
+    TEST_ASSERT(
+        0U != endorse_config_default_context_get_error_message_count(ctx));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -1757,64 +1864,76 @@ TEST(role_extends_analysis_circular_n1)
  */
 TEST(role_extends_analysis_circular_n2)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] =
+        R"MULTI(
+        entities {
+            agentd
+        }
+        verbs for agentd {
+            latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
+            next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
+            prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
+            block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
+            transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
+            transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
+            artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+            assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
+            sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
+        }
+        roles for agentd {
+            a extends b {
+            }
+            b extends c {
+            }
+            c extends a {
+            }
+        })MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                entities {
-                    agentd
-                }
-                verbs for agentd {
-                    latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
-                    next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
-                    prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
-                    block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
-                    transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
-                    transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
-                    artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
-                    assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
-                    sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
-                }
-                roles for agentd {
-                    a extends b {
-                    }
-                    b extends c {
-                    }
-                    c extends a {
-                    }
-                })MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
+
+    /* get the root node. */
+    endorse_config* root = (endorse_config*)
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
 
     /* Semantic analysis fails due to circular reference. */
     TEST_ASSERT(
-        STATUS_SUCCESS != endorse_analyze(&context, user_context->config));
+        STATUS_SUCCESS != endorse_analyze(ctx, root));
 
     /* errors were set. */
-    TEST_ASSERT(0U != user_context->errors->size());
+    TEST_ASSERT(
+        0U != endorse_config_default_context_get_error_message_count(ctx));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
@@ -1826,66 +1945,78 @@ TEST(role_extends_analysis_circular_n2)
  */
 TEST(role_extends_analysis_circular_n3)
 {
-    YY_BUFFER_STATE state;
-    yyscan_t scanner;
-    endorse_config_context context;
-    test_context* user_context;
+    endorse_config_context* ctx;
     rcpr_allocator* alloc;
+    allocator_options_t vpr_alloc;
+    vccrypt_buffer_t input;
+    const char INPUT[] =
+        R"MULTI(
+        entities {
+            agentd
+        }
+        verbs for agentd {
+            latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
+            next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
+            prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
+            block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
+            transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
+            transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
+            artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
+            assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
+            sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
+        }
+        roles for agentd {
+            a extends b {
+            }
+            b extends c {
+            }
+            c extends d {
+            }
+            d extends a {
+            }
+        })MULTI";
 
+    /* create the RCPR malloc allocator. */
     TEST_ASSERT(STATUS_SUCCESS == rcpr_malloc_allocator_create(&alloc));
 
-    TEST_ASSERT(STATUS_SUCCESS == test_context_create(&user_context, alloc));
+    /* create the VPR malloc allocator. */
+    malloc_allocator_options_init(&vpr_alloc);
 
-    context.alloc = alloc;
-    context.set_error = &set_error;
-    context.val_callback = &config_callback;
-    context.user_context = user_context;
+    /* create a default config context. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_config_create_default(&ctx, alloc));
 
-    TEST_ASSERT(0 == yylex_init(&scanner));
-    TEST_ASSERT(nullptr != 
-        (state =
-            yy_scan_string(
-                R"MULTI(
-                entities {
-                    agentd
-                }
-                verbs for agentd {
-                    latest_block_id_get     c5b0eb04-6b24-48be-b7d9-bf9083a4be5d
-                    next_block_id_get       6a399f0d-ddb3-45dc-b2e3-0227a962b237
-                    prev_block_id_get       73cfae64-80e8-412d-b005-344d537766a6
-                    block_get               f382e365-1224-43b4-924a-1de4d9f4cf25
-                    transaction_get         7df210d6-f00b-47c4-a608-6f3f1df7511a
-                    transaction_submit      ef560d24-eea6-4847-9009-464b127f249b
-                    artifact_get            fc0e22ea-1e77-4ea4-a2ae-08be5ff73ccc
-                    assert_latest_block_id  447617b4-a847-437c-b62b-5bc6a94206fa
-                    sentinel_extend_api     c41b053c-6b4a-40a1-981b-882bdeffe978
-                }
-                roles for agentd {
-                    a extends b {
-                    }
-                    b extends c {
-                    }
-                    c extends d {
-                    }
-                    d extends a {
-                    }
-                })MULTI", scanner)));
-    TEST_ASSERT(0 == yyparse(scanner, &context));
-    yy_delete_buffer(state, scanner);
-    yylex_destroy(scanner);
+    /* create a buffer with our string. */
+    TEST_ASSERT(
+        STATUS_SUCCESS ==
+            vccrypt_buffer_init(&input, &vpr_alloc, strlen(INPUT) + 1));
+    memset(input.data, 0, input.size);
+    TEST_ASSERT(
+        STATUS_SUCCESS == vccrypt_buffer_read_data(&input, INPUT, input.size));
+
+    /* parse the data. */
+    TEST_ASSERT(STATUS_SUCCESS == endorse_parse(ctx, &input));
 
     /* there are no errors. */
-    TEST_ASSERT(0U == user_context->errors->size());
+    TEST_ASSERT(
+        0U == endorse_config_default_context_get_error_message_count(ctx));
+
+    /* verify user config. */
+    endorse_config* root = (endorse_config*)
+        endorse_config_default_context_get_endorse_config_root(ctx);
+    TEST_ASSERT(nullptr != root);
 
     /* Semantic analysis fails due to circular reference. */
     TEST_ASSERT(
-        STATUS_SUCCESS != endorse_analyze(&context, user_context->config));
+        STATUS_SUCCESS != endorse_analyze(ctx, root));
 
     /* errors were set. */
-    TEST_ASSERT(0U != user_context->errors->size());
+    TEST_ASSERT(
+        0U != endorse_config_default_context_get_error_message_count(ctx));
 
     /* clean up. */
-    TEST_ASSERT(STATUS_SUCCESS == resource_release(&user_context->hdr));
+    TEST_ASSERT(STATUS_SUCCESS == resource_release(&ctx->hdr));
+    dispose(vccrypt_buffer_disposable_handle(&input));
+    dispose(allocator_options_disposable_handle(&vpr_alloc));
     TEST_ASSERT(
         STATUS_SUCCESS ==
             resource_release(rcpr_allocator_resource_handle(alloc)));
