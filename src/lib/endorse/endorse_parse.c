@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <vctool/endorse.h>
+#include <vctool/status_codes.h>
 
 #include "endorse.tab.h"
 #include "endorse.yy.h"
@@ -33,6 +34,7 @@ status endorse_parse(
     retval = yylex_init(&scanner);
     if (STATUS_SUCCESS != retval)
     {
+        fprintf(stderr, "%s:%d\n", __FILE__, __LINE__);
         goto done;
     }
 
@@ -40,6 +42,8 @@ status endorse_parse(
     state = yy_scan_string(input->data, scanner);
     if (NULL == state)
     {
+        fprintf(stderr, "%s:%d\n", __FILE__, __LINE__);
+        retval = VCTOOL_ERROR_GENERAL_OUT_OF_MEMORY;
         goto cleanup_scanner;
     }
 
@@ -47,6 +51,7 @@ status endorse_parse(
     retval = yyparse(scanner, context);
     if (STATUS_SUCCESS != retval)
     {
+        fprintf(stderr, "%s:%d\n", __FILE__, __LINE__);
         goto cleanup_buffer;
     }
 
