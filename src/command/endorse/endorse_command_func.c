@@ -11,6 +11,7 @@
 #include "endorse_internal.h"
 
 RCPR_IMPORT_allocator_as(rcpr);
+RCPR_IMPORT_rbtree;
 RCPR_IMPORT_resource;
 
 /**
@@ -34,6 +35,7 @@ int endorse_command_func(commandline_opts* opts)
     vccrypt_buffer_t endorse_cfg;
     endorse_config_context* endorse_ctx;
     const endorse_config* ast;
+    rbtree* dict;
 
     /* parameter sanity checks. */
     MODEL_ASSERT(PROP_VALID_COMMANDLINE_OPTS(opts));
@@ -99,6 +101,11 @@ int endorse_command_func(commandline_opts* opts)
         endorse_analyze(endorse_ctx, (endorse_config*)ast),
         cleanup_endorse_cfg);
 
+    /* build a dictionary of dictionary key to entity UUID data. */
+    TRY_OR_FAIL(
+        endorse_build_uuid_dictionary(&dict, root->alloc, opts, root),
+        cleanup_endorse_cfg);
+
     /* For each dictionary definition: */
         /* Verify that the definition is an entity in the config. */
         /* Verify that the file is a valid public key file and read it. */
@@ -115,11 +122,12 @@ int endorse_command_func(commandline_opts* opts)
         /* Add an endorsement permission triplet to the output file. */
     /* Sign the output file using the endorser signing key and id. */
 
-    (void)opts;
-
     fprintf(stderr, "endorse not yet implemented.\n");
 
-    goto cleanup_endorse_cfg;
+    goto cleanup_dict;
+
+cleanup_dict:
+    CLEANUP_OR_CASCADE(rbtree_resource_handle(dict));
 
 cleanup_endorse_cfg:
     dispose(vccrypt_buffer_disposable_handle(&endorse_cfg));
