@@ -19,6 +19,7 @@
 #include <vctool/command/endorse.h>
 #include <vctool/command/root.h>
 #include <vctool/control.h>
+#include <vctool/endorse.h>
 #include <vctool/readpassword.h>
 
 #include "certfile.h"
@@ -37,6 +38,24 @@ struct endorse_uuid_dictionary_entry
     RCPR_SYM(allocator)* alloc;
     char* key;
     RCPR_SYM(rcpr_uuid) value;
+};
+
+typedef struct endorse_working_set_key endorse_working_set_key;
+
+struct endorse_working_set_key
+{
+    RCPR_SYM(rcpr_uuid) object;
+    RCPR_SYM(rcpr_uuid) verb;
+    RCPR_SYM(rcpr_uuid) restriction;
+};
+
+typedef struct endorse_working_set_entry endorse_working_set_entry;
+
+struct endorse_working_set_entry
+{
+    RCPR_SYM(resource) hdr;
+    RCPR_SYM(allocator)* alloc;
+    endorse_working_set_key key;
 };
 
 /**
@@ -229,6 +248,73 @@ status endorse_build_uuid_dictionary(
     const root_command* root);
 
 /**
+ * \brief Build a working set of capabilities using the AST and uuid dictionary.
+ *
+ * \param set               Receive a pointer to the working set on success.
+ * \param alloc             The allocator to use for this operation.
+ * \param root              The root command config.
+ * \param ast               The ast to use for this operation.
+ * \param dict              The uuid dictionary to use for this operation.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_build_working_set(
+    RCPR_SYM(rbtree)** set, RCPR_SYM(allocator)* alloc,
+    const root_command* root, const endorse_config* ast,
+    RCPR_SYM(rbtree)* dict);
+
+/**
+ * \brief Decode and add the capabilities represented by the given moiety.
+ *
+ * \param set               The current working set.
+ * \param alloc             The allocator to use for this operation.
+ * \param entity            The entity to use for this operation.
+ * \param entity_id         The ID of this entity.
+ * \param moiety            The moiety to decode.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_working_set_add_capabilities(
+    RCPR_SYM(rbtree)* set, RCPR_SYM(allocator)* alloc, endorse_entity* entity,
+    const RCPR_SYM(rcpr_uuid)* entity_id, const char* moiety);
+
+/**
+ * \brief Add all of the capabilities for the given role to the working set.
+ *
+ * \param set               The current working set.
+ * \param alloc             The allocator to use for this operation.
+ * \param entity_id         The ID of this entity.
+ * \param role              The role to add to this working set.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_working_set_add_role_capabilities(
+    RCPR_SYM(rbtree)* set, RCPR_SYM(allocator)* alloc,
+    const RCPR_SYM(rcpr_uuid)* entity_id, endorse_role* role);
+
+/**
+ * \brief Add the capability associated with the given verb to the working set.
+ *
+ * \param set               The current working set.
+ * \param alloc             The allocator to use for this operation.
+ * \param entity_id         The ID of this entity.
+ * \param verb              The verb to use for this operation.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_working_set_add_verb_capability(
+    RCPR_SYM(rbtree)* set, RCPR_SYM(allocator)* alloc,
+    const RCPR_SYM(rcpr_uuid)* entity_id, endorse_verb* verb);
+
+/**
  * \brief Compare two opaque uuid values.
  *
  * \param context       Unused.
@@ -253,6 +339,33 @@ RCPR_SYM(rcpr_comparison_result) endorse_uuid_dictionary_compare(
  * \returns the key for the entry.
  */
 const void* endorse_uuid_dictionary_key(
+    void* /*context*/, const RCPR_SYM(resource)* r);
+
+/**
+ * \brief Compare two opaque working set values.
+ *
+ * \param context       Unused.
+ * \param lhs           The left-hand side of the comparison.
+ * \param rhs           The right-hand side of the comparison.
+ *
+ * \returns an integer value representing the comparison result.
+ *      - RCPR_COMPARE_LT if \p lhs &lt; \p rhs.
+ *      - RCPR_COMPARE_EQ if \p lhs == \p rhs.
+ *      - RCPR_COMPARE_GT if \p lhs &gt; \p rhs.
+ */
+RCPR_SYM(rcpr_comparison_result) endorse_working_set_compare(
+    void* /*context*/, const void* lhs, const void* rhs);
+
+/**
+ * \brief Given an endorse_working_set_entry, return the key.
+ *
+ * \param context       Unused.
+ * \param r             The resource handle of the
+ *                      endorse_working_set_entry.
+ *
+ * \returns the key for the entry.
+ */
+const void* endorse_working_set_get_key(
     void* /*context*/, const RCPR_SYM(resource)* r);
 
 /**
@@ -281,6 +394,17 @@ status endorse_uuid_dictionary_add(
  *      - a non-zero error code on failure.
  */
 status endorse_uuid_dictionary_entry_resource_release(RCPR_SYM(resource)* r);
+
+/**
+ * \brief Release an endorse working set entry resource.
+ *
+ * \param r             The resource to release.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_working_set_entry_resource_release(RCPR_SYM(resource)* r);
 
 /* make this header C++ friendly. */
 #ifdef __cplusplus

@@ -36,6 +36,7 @@ int endorse_command_func(commandline_opts* opts)
     endorse_config_context* endorse_ctx;
     const endorse_config* ast;
     rbtree* dict;
+    rbtree* set;
 
     /* parameter sanity checks. */
     MODEL_ASSERT(PROP_VALID_COMMANDLINE_OPTS(opts));
@@ -106,10 +107,11 @@ int endorse_command_func(commandline_opts* opts)
         endorse_build_uuid_dictionary(&dict, root->alloc, opts, root),
         cleanup_endorse_cfg);
 
-    /* For each dictionary definition: */
-        /* Verify that the definition is an entity in the config. */
-        /* Verify that the file is a valid public key file and read it. */
-        /* Save the UUID for the entity to the AST. */
+    /* build the working set. */
+    TRY_OR_FAIL(
+        endorse_build_working_set(&set, root->alloc, root, ast, dict),
+        cleanup_dict);
+
     /* For each permission: */
         /* Verify that the entity exists in the AST and has a UUID. */
         /* Expand the moiety into a set of verbs. */
@@ -124,7 +126,10 @@ int endorse_command_func(commandline_opts* opts)
 
     fprintf(stderr, "endorse not yet implemented.\n");
 
-    goto cleanup_dict;
+    goto cleanup_set;
+
+cleanup_set:
+    CLEANUP_OR_CASCADE(rbtree_resource_handle(set));
 
 cleanup_dict:
     CLEANUP_OR_CASCADE(rbtree_resource_handle(dict));
