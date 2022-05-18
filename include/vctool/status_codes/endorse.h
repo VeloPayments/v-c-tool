@@ -28,6 +28,12 @@ extern "C" {
 #define VCTOOL_ERROR_ENDORSE_ERROR_MESSAGE_INDEX_OUT_OF_BOUNDS \
     VCTOOL_STATUS_ERROR_MACRO(VCTOOL_COMPONENT_ENDORSE, 0x0002U)
 
+/**
+ * \brief The role or verb is unknown.
+ */
+#define VCTOOL_ERROR_ENDORSE_UNKNOWN_ROLE_OR_VERB \
+    VCTOOL_STATUS_ERROR_MACRO(VCTOOL_COMPONENT_ENDORSE, 0x0003U)
+
 /* make this header C++ friendly. */
 #ifdef __cplusplus
 }
