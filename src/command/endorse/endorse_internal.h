@@ -266,6 +266,25 @@ status endorse_build_working_set(
     RCPR_SYM(rbtree)* dict);
 
 /**
+ * \brief Build the output file given the output filename, the key certificate,
+ * the working set, and the input file certificate.
+ *
+ * \param output_filename   The name of the output file.
+ * \param opts              The commandline options for this operation.
+ * \param key_cert          The endorser's key certificate.
+ * \param set               The working set.
+ * \param input_cert        The public key input certificate.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_build_output_file(
+    const char* output_filename, commandline_opts* opts,
+    const vccrypt_buffer_t* key_cert, RCPR_SYM(rbtree)* set,
+    const vccrypt_buffer_t* input_cert);
+
+/**
  * \brief Decode and add the capabilities represented by the given moiety.
  *
  * \param set               The current working set.
@@ -383,6 +402,55 @@ const void* endorse_working_set_get_key(
 status endorse_uuid_dictionary_add(
     RCPR_SYM(rbtree)* dict, RCPR_SYM(allocator)* alloc, const char* key,
     const RCPR_SYM(rcpr_uuid)* value);
+
+/**
+ * \brief Get the endorser id and private signing key.
+ *
+ * \param endorser_id       Pointer to be populated with the endorser id.
+ * \param private_key       Pointer to an uninitialized vccrypt buffer to be
+ *                          initialized with the endorser private key.
+ * \param opts              The command-line options for this operation.
+ * \param key_cert          The endorser's private key certificate.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_get_endorser_details(
+    RCPR_SYM(rcpr_uuid)* endorser_id, vccrypt_buffer_t* private_key,
+    commandline_opts* opts, const vccrypt_buffer_t* key_cert);
+
+/**
+ * \brief Write the public certificate fields to the builder.
+ *
+ * \param builder           The builder to which the fields are written.
+ * \param opts              The command-line options for this operation.
+ * \param pub_id            Pointer to UUID buffer to receive the public entity
+ *                          id of this entity.
+ * \param public_cert       The public certificate as a vccrypt buffer.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_emit_public_certificate_fields(
+    vccert_builder_context_t* builder, commandline_opts* opts,
+    RCPR_SYM(rcpr_uuid)* pub_id, const vccrypt_buffer_t* public_cert);
+
+/**
+ * \brief Write the working set to the builder.
+ *
+ * \param builder           The builder to which the fields are written.
+ * \param pub_id            The uuid of the entity being granted endorsements.
+ * \param set               The working set to write to the builder.
+ *
+ * \returns a status code indicating success or failure.
+ *      - STATUS_SUCCESS on success.
+ *      - a non-zero error code on failure.
+ */
+status endorse_emit_working_set(
+    vccert_builder_context_t* builder, const RCPR_SYM(rcpr_uuid)* pub_id,
+    RCPR_SYM(rbtree)* set);
 
 /**
  * \brief Release an endorse uuid dictionary entry resource.
