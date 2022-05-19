@@ -112,20 +112,14 @@ int endorse_command_func(commandline_opts* opts)
         endorse_build_working_set(&set, root->alloc, root, ast, dict),
         cleanup_dict);
 
-    /* For each permission: */
-        /* Verify that the entity exists in the AST and has a UUID. */
-        /* Expand the moiety into a set of verbs. */
-        /* For each verb, create a pair of entity id / verb id. */
-        /* See if this pair exists in the working set. */
-        /* If not, add it. */
     /* Create the output file. */
-    /* Append all public key data from the input file. */
-    /* For each pair in the working set: */
-        /* Add an endorsement permission triplet to the output file. */
-    /* Sign the output file using the endorser signing key and id. */
+    TRY_OR_FAIL(
+        endorse_build_output_file(
+            output_filename, opts, &key_cert, set, &input_cert),
+        cleanup_set);
 
-    fprintf(stderr, "endorse not yet implemented.\n");
-
+    /* success. */
+    retval = STATUS_SUCCESS;
     goto cleanup_set;
 
 cleanup_set:
