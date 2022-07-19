@@ -233,7 +233,7 @@ TEST(happy_path)
             &suite,
             [&](
                 vccrypt_block_options_t*, vccrypt_block_context_t*,
-                vccrypt_buffer_t* key, bool enc) -> int {
+                const vccrypt_buffer_t* key, bool enc) -> int {
                     if (enc)
                         block_init_called = true;
                     if (32 == key->size
