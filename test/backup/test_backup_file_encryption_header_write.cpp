@@ -281,7 +281,7 @@ TEST(happy_path)
             &suite,
             [&](
                 vccrypt_mac_options_t*, vccrypt_mac_context_t*,
-                vccrypt_buffer_t*) -> int {
+                const vccrypt_buffer_t*) -> int {
                     mac_init_called = true;
                     return VCCRYPT_STATUS_SUCCESS;
             }));
