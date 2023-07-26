@@ -58,6 +58,11 @@ enum vctool_components
      * \brief keygen Component.
      */
     VCTOOL_COMPONENT_KEYGEN = 0x07U,
+
+    /**
+     * \brief pubkey Component.
+     */
+    VCTOOL_COMPONENT_PUBKEY = 0x08U,
 };
 
 /* make this header C++ friendly. */
