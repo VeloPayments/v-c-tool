@@ -53,6 +53,11 @@ enum vctool_components
      * \brief endorse Component.
      */
     VCTOOL_COMPONENT_ENDORSE = 0x06U,
+
+    /**
+     * \brief keygen Component.
+     */
+    VCTOOL_COMPONENT_KEYGEN = 0x07U,
 };
 
 /* make this header C++ friendly. */

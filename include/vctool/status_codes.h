@@ -3,7 +3,7 @@
  *
  * \brief Status code definitions for vctool.
  *
- * \copyright 2020 Velo Payments.  See License.txt for license terms.
+ * \copyright 2020-2023 Velo Payments.  See License.txt for license terms.
  */
 
 #ifndef VCTOOL_STATUS_CODES_HEADER_GUARD
@@ -16,6 +16,7 @@
 #include <vctool/status_codes/endorse.h>
 #include <vctool/status_codes/file.h>
 #include <vctool/status_codes/general.h>
+#include <vctool/status_codes/keygen.h>
 #include <vctool/status_codes/readpassword.h>
 
 /* make this header C++ friendly. */

@@ -3,7 +3,7 @@
  *
  * \brief Entry point for the keygen command.
  *
- * \copyright 2020 Velo Payments.  See License.txt for license terms.
+ * \copyright 2020-2023 Velo Payments.  See License.txt for license terms.
  */
 
 #include <cbmc/model_assert.h>
@@ -15,6 +15,7 @@
 #include <vctool/command/keygen.h>
 #include <vctool/command/root.h>
 #include <vctool/readpassword.h>
+#include <vctool/status_codes.h>
 
 /**
  * \brief Execute the keygen command.
@@ -60,6 +61,7 @@ int keygen_command_func(commandline_opts* opts)
     if (VCTOOL_ERROR_FILE_NO_ENTRY != retval)
     {
         fprintf(stderr, "Won't clobber existing file.  Stopping.\n");
+        retval = VCTOOL_ERROR_KEYGEN_WOULD_CLOBBER_FILE;
         goto done;
     }
 
