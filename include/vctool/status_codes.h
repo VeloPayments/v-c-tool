@@ -17,6 +17,7 @@
 #include <vctool/status_codes/file.h>
 #include <vctool/status_codes/general.h>
 #include <vctool/status_codes/keygen.h>
+#include <vctool/status_codes/pubkey.h>
 #include <vctool/status_codes/readpassword.h>
 
 /* make this header C++ friendly. */

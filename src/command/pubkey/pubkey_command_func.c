@@ -91,6 +91,7 @@ int pubkey_command_func(commandline_opts* opts)
         fprintf(
             stderr, "Won't clobber existing file %s.  Stopping.\n",
             output_filename);
+        retval = VCTOOL_ERROR_PUBKEY_WOULD_CLOBBER_FILE;
         goto free_output_filename;
     }
 
