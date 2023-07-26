@@ -203,7 +203,7 @@ int pubkey_command_func(commandline_opts* opts)
     retval =
         file_open(
             opts->file, &out_fd, output_filename, O_CREAT | O_EXCL | O_WRONLY,
-            S_IRUSR | S_IWUSR);
+            S_IRUSR);
     if (VCTOOL_STATUS_SUCCESS != retval)
     {
         fprintf(stderr, "Error opening output file %s.\n", output_filename);
